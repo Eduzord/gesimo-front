@@ -1,5 +1,5 @@
 import React from "react";
-import { LayoutDashboard, Users, LogOut, Menu, Home, Calendar, Percent, Settings } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, Menu, Home, Calendar, Percent, Settings, Landmark } from "lucide-react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { isAdmin } from "../../utils/auth";
 
@@ -29,6 +29,7 @@ export default function Sidebar({ menuAberto, setMenuAberto, nome }) {
     { icon: Calendar, label: "Agenda", path: "/agendamentos"},
     { icon: Percent, label: "Tabelas IRRF", path: "/irrf" },
     { icon: Settings, label: "Gerenciar IRRF", path: "/irrf/gerenciar", adminOnly: true },
+    { icon: Landmark, label: "Contas Bancárias", path: "/contas-bancarias" },
   ].filter((link) => !link.adminOnly || isAdmin());
 
   return (

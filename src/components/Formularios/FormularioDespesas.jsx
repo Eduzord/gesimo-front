@@ -9,10 +9,11 @@ export default function FormularioDespesa({ imovelId, onClose, onSuccess }) {
     valor: "",
     tipo: "MANUTENCAO",
     dataVencimento: "",
-    status: "EM_ABERTO",
   });
 
   const [arquivoSelecionado, setArquivoSelecionado] = useState(null);
+  const [dataPagamento, setDataPagamento] = useState("");
+  const [enviando, setEnviando] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -22,12 +23,19 @@ export default function FormularioDespesa({ imovelId, onClose, onSuccess }) {
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
       setArquivoSelecionado(e.target.files[0]);
-
-      setFormData((prev) => ({ ...prev, status: "PAGA" }));
+      if (!dataPagamento) setDataPagamento(new Date().toISOString().slice(0, 10));
+    } else {
+      setArquivoSelecionado(null);
     }
   };
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (arquivoSelecionado && !dataPagamento) {
+      alert("Informe a data em que o pagamento foi efetuado.");
+      return;
+    }
+
+    setEnviando(true);
     try {
       const token = localStorage.getItem("@gesimo:token");
 
@@ -37,18 +45,21 @@ export default function FormularioDespesa({ imovelId, onClose, onSuccess }) {
         valor: Number(formData.valor),
         tipo: formData.tipo,
         dataVencimento: formData.dataVencimento,
-        status: formData.status,
       };
 
-      const resposta = await api.post("/despesas", payloadDespesa, {
+      // A despesa nasce sempre EM_ABERTO; a baixa (status PAGA) só acontece de fato
+      // ao anexar o comprovante, na chamada seguinte.
+      const resposta = await api.post("/imoveis/despesas", payloadDespesa, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      const idDespesa = resposta.data?.data?.id ?? resposta.data?.id;
 
       if (arquivoSelecionado) {
         const payloadArquivo = new FormData();
         payloadArquivo.append("file", arquivoSelecionado);
+        payloadArquivo.append("dataPagamento", dataPagamento);
         await api.patch(
-          `/despesas/${resposta.data.id}/comprovante`,
+          `/imoveis/despesas/${idDespesa}/pagamento`,
           payloadArquivo,
           {
             headers: {
@@ -63,6 +74,8 @@ export default function FormularioDespesa({ imovelId, onClose, onSuccess }) {
     } catch (erro) {
       console.error("Erro ao criar despesa:", erro);
       alert("Houve um erro ao salvar a despesa.");
+    } finally {
+      setEnviando(false);
     }
   };
 
@@ -112,6 +125,7 @@ export default function FormularioDespesa({ imovelId, onClose, onSuccess }) {
             <option value="CONDOMINIO">Condomínio</option>
             <option value="IPTU">IPTU</option>
             <option value="TAXA_BOMBEIRO">Taxa Bombeiro</option>
+            <option value="SEGURO_INCENDIO">Seguro Incêndio</option>
             <option value="MANUTENCAO">Manutenção</option>
             <option value="OUTRA">Outra</option>
           </select>
@@ -143,39 +157,42 @@ export default function FormularioDespesa({ imovelId, onClose, onSuccess }) {
             className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
           />
         </div>
-
-        <div>
-          <label className="block text-sm text-gray-700 mb-1">Status</label>
-          <select
-            name="status"
-            value={formData.status}
-            onChange={handleChange}
-            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-          >
-            <option value="EM_ABERTO">Em Aberto</option>
-            <option value="PAGA">Paga</option>
-          </select>
-        </div>
       </div>
 
-      <div className="pt-2 border-t border-gray-100 mt-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Anexar Comprovante / Boleto
-        </label>
-        <input
-          type="file"
-          accept=".pdf,image/*"
-          onChange={handleFileChange}
-          className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-        />
+      {/* A despesa é lançada como EM_ABERTO por padrão; anexar o comprovante aqui já a dá como paga. */}
+      <div className="pt-2 border-t border-gray-100 mt-4 space-y-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Anexar Comprovante / Boleto (opcional — já registra como paga)
+          </label>
+          <input
+            type="file"
+            accept=".pdf,image/*"
+            onChange={handleFileChange}
+            className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          />
+        </div>
+
+        {arquivoSelecionado && (
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Data do Pagamento</label>
+            <input
+              type="date"
+              value={dataPagamento}
+              onChange={(e) => setDataPagamento(e.target.value)}
+              required
+              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+        )}
       </div>
 
       <div className="pt-6 flex justify-end gap-3">
-        <Button variant="secondary" onClick={onClose} type="button">
+        <Button variant="secondary" onClick={onClose} type="button" disabled={enviando}>
           Cancelar
         </Button>
-        <Button variant="primary" type="submit">
-          Salvar Despesa
+        <Button variant="primary" type="submit" disabled={enviando}>
+          {enviando ? "Salvando..." : "Salvar Despesa"}
         </Button>
       </div>
     </form>

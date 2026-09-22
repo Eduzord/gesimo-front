@@ -7,6 +7,7 @@ import Button from '../../components/Button';
 import Badge from '../../components/Badge';
 import FormularioLocatario from '../../components/Formularios/FormularioLocatario';
 import FormularioVincularImovel from '../../components/Formularios/FormularioVincularImovel';
+import ModalGerarMemoriaCalculo from '../../components/Formularios/ModalGerarMemoriaCalculo';
 import ModalContainer from '../../components/ModalContainer';
 import { api } from '../../services/api';
 import { enderecoDoImovel, nomeDoLocatario } from '../../utils/posse';
@@ -21,6 +22,7 @@ export default function DetalhesLocatario() {
   const [carregando, setCarregando] = useState(true);
   const [modalEdicaoAberto, setModalEdicaoAberto] = useState(isEditInit);
   const [modalVincularAberto, setModalVincularAberto] = useState(false);
+  const [modalMemoriaAberto, setModalMemoriaAberto] = useState(false);
   const [contratos, setContratos] = useState([]);
 
   const [nomeUsuario, setNomeUsuario] = useState("");
@@ -152,9 +154,18 @@ export default function DetalhesLocatario() {
                 </div>
               </div>
               <div className="flex flex-wrap justify-end gap-3">
-                {/* Ações ainda não implementadas */}
+                {/* Recibo de aluguel: ainda não implementado */}
                 <Button variant="outline" icon={Receipt}>Gerar Recibo de Aluguel</Button>
-                <Button variant="outline" icon={Calculator}>Gerar Memória de Cálculo</Button>
+                <span title={contratosAtivos.length === 0 ? "Este locatário não tem um contrato ativo." : ""}>
+                  <Button
+                    variant="outline"
+                    icon={Calculator}
+                    disabled={contratosAtivos.length === 0}
+                    onClick={() => setModalMemoriaAberto(true)}
+                  >
+                    Gerar Memória de Cálculo
+                  </Button>
+                </span>
                 <Button variant="secondary" icon={Edit} onClick={() => setModalEdicaoAberto(true)}>Editar</Button>
                 <Button variant="primary" icon={Trash2} onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white border-none">Apagar</Button>
                 {localStorage.getItem("@gesimo:role") === "ADMIN" && (
@@ -251,6 +262,20 @@ export default function DetalhesLocatario() {
               setModalVincularAberto(false);
               carregarContratos();
             }}
+          />
+        </ModalContainer>
+      )}
+
+      {modalMemoriaAberto && contratosAtivos.length > 0 && (
+        <ModalContainer
+          isOpen
+          onClose={() => setModalMemoriaAberto(false)}
+          title="Gerar Memória de Cálculo"
+          largura="max-w-4xl"
+        >
+          <ModalGerarMemoriaCalculo
+            imovelId={contratosAtivos[0].idImovel}
+            onClose={() => setModalMemoriaAberto(false)}
           />
         </ModalContainer>
       )}

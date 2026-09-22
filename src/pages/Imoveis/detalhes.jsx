@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { UploadCloud, FileText, Edit, MapPin, ArrowLeft, Trash2, AlertCircle, UserPlus, Calculator } from "lucide-react";
+import { UploadCloud, FileText, Edit, MapPin, ArrowLeft, Trash2, AlertCircle, CheckCircle2, UserPlus, Calculator } from "lucide-react";
 import Sidebar from "../../components/Sidebar";
 import Header from "../../components/Header";
 import Badge from "../../components/Badge";
@@ -9,8 +9,13 @@ import ModalContainer from "../../components/ModalContainer";
 import FormularioEdicaoImovel from "../../components/Formularios/FormularioEdicaoImovel";
 import FormularioContrato from "../../components/Formularios/FormularioContrato";
 import FormularioDespesa from "../../components/Formularios/FormularioDespesas";
+import FormularioLiquidarDespesa from "../../components/Formularios/FormularioLiquidarDespesa";
 import EditorPosseImovel from "../../components/Formularios/EditorPosseImovel";
+import ModalGerarMemoriaCalculo from "../../components/Formularios/ModalGerarMemoriaCalculo";
 import { api } from "../../services/api";
+import { listarDespesasDoImovel } from "../../services/memoriaCalculo";
+import { formatarMoeda } from "../../utils/formatacao";
+import { TIPOS_DESPESA } from "../../utils/memoriaCalculo";
 import {
   formatarPercentual,
   nomeDoLocador,
@@ -32,8 +37,12 @@ export default function DetalhesImovel() {
   const [modalContratoAberto, setModalContratoAberto] = useState(false);
   const [modalDespesaAberto, setModalDespesaAberto] = useState(false);
   const [modalPosseAberto, setModalPosseAberto] = useState(false);
+  const [modalMemoriaAberto, setModalMemoriaAberto] = useState(false);
   const [contratos, setContratos] = useState([]);
   const [contratoEmEdicao, setContratoEmEdicao] = useState(null);
+  const [despesasImovel, setDespesasImovel] = useState([]);
+  const [carregandoDespesas, setCarregandoDespesas] = useState(true);
+  const [despesaEmLiquidacao, setDespesaEmLiquidacao] = useState(null);
   // Nomes resolvidos por ID (o imóvel e o contrato só guardam idLocador/idLocatario)
   const [nomesLocadores, setNomesLocadores] = useState({});
   const [nomesLocatarios, setNomesLocatarios] = useState({});
@@ -93,6 +102,17 @@ export default function DetalhesImovel() {
 
     if (id) carregarContratos();
   }, [id]);
+
+  const recarregarDespesas = () => {
+    if (!id) return;
+    setCarregandoDespesas(true);
+    listarDespesasDoImovel(id)
+      .then((dados) => setDespesasImovel(Array.isArray(dados) ? dados : []))
+      .catch((erro) => console.error("Erro ao carregar despesas do imóvel:", erro))
+      .finally(() => setCarregandoDespesas(false));
+  };
+
+  useEffect(recarregarDespesas, [id]);
 
   // Resolve os nomes de locadores (proprietários + locadores dos contratos) e locatários dos contratos
   useEffect(() => {
@@ -265,8 +285,9 @@ export default function DetalhesImovel() {
                 </div>
               </div>
               <div className="flex flex-wrap justify-end gap-3">
-                {/* Ação ainda não implementada */}
-                <Button variant="outline" icon={Calculator}>Gerar Memória de Cálculo</Button>
+                <Button variant="outline" icon={Calculator} onClick={() => setModalMemoriaAberto(true)}>
+                  Gerar Memória de Cálculo
+                </Button>
                 <Button
                   variant="secondary"
                   icon={Edit}
@@ -589,20 +610,57 @@ export default function DetalhesImovel() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        <tr className="hover:bg-gray-50/50 transition-colors group">
-                          <td className="px-4 py-4 text-gray-900 font-medium">Manutenção Encanamento</td>
-                          <td className="px-4 py-4 text-gray-500">MANUTENCAO</td>
-                          <td className="px-4 py-4 text-gray-500">10/08/2026</td>
-                          <td className="px-4 py-4 text-gray-900 font-bold">R$ 250,00</td>
-                          <td className="px-4 py-4">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                              <AlertCircle size={12} /> Em Aberto
-                            </span>
-                          </td>
-                          <td className="px-4 py-4 text-right">
-                            <button className="text-blue-600 hover:text-blue-800 font-medium text-xs">Pagar</button>
-                          </td>
-                        </tr>
+                        {carregandoDespesas ? (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                              Carregando despesas...
+                            </td>
+                          </tr>
+                        ) : despesasImovel.length === 0 ? (
+                          <tr className="hover:bg-gray-50/50 transition-colors group">
+                            <td className="px-4 py-4 flex items-center gap-3" colSpan={6}>
+                              <FileText size={18} className="text-gray-400" />
+                              <span className="font-medium text-gray-500">
+                                Nenhuma despesa lançada para este imóvel ainda.
+                              </span>
+                            </td>
+                          </tr>
+                        ) : (
+                          despesasImovel.map((despesa) => {
+                            const quitada = despesa.status === "PAGA" && despesa.comprovantePagamento;
+                            return (
+                              <tr key={despesa.id} className="hover:bg-gray-50/50 transition-colors group">
+                                <td className="px-4 py-4 text-gray-900 font-medium">{despesa.descricao}</td>
+                                <td className="px-4 py-4 text-gray-500">
+                                  {TIPOS_DESPESA.find((t) => t.value === despesa.tipo)?.label || despesa.tipo}
+                                </td>
+                                <td className="px-4 py-4 text-gray-500">{formatarData(despesa.dataVencimento)}</td>
+                                <td className="px-4 py-4 text-gray-900 font-bold">{formatarMoeda(despesa.valor)}</td>
+                                <td className="px-4 py-4">
+                                  {quitada ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      <CheckCircle2 size={12} /> Quitada
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                                      <AlertCircle size={12} /> Em Aberto
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-4 text-right">
+                                  {!quitada && (
+                                    <button
+                                      onClick={() => setDespesaEmLiquidacao(despesa)}
+                                      className="text-blue-600 hover:text-blue-800 font-medium text-xs"
+                                    >
+                                      Anexar comprovante
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -710,8 +768,40 @@ export default function DetalhesImovel() {
             onClose={() => setModalDespesaAberto(false)}
             onSuccess={() => {
               setModalDespesaAberto(false);
-              window.location.reload();
+              recarregarDespesas();
             }}
+          />
+        </ModalContainer>
+      )}
+
+      {despesaEmLiquidacao && (
+        <ModalContainer
+          isOpen
+          onClose={() => setDespesaEmLiquidacao(null)}
+          title="Registrar pagamento da despesa"
+        >
+          <FormularioLiquidarDespesa
+            despesa={despesaEmLiquidacao}
+            onClose={() => setDespesaEmLiquidacao(null)}
+            onSuccess={() => {
+              setDespesaEmLiquidacao(null);
+              recarregarDespesas();
+            }}
+          />
+        </ModalContainer>
+      )}
+
+      {modalMemoriaAberto && (
+        <ModalContainer
+          isOpen
+          onClose={() => setModalMemoriaAberto(false)}
+          title="Gerar Memória de Cálculo"
+          largura="max-w-4xl"
+        >
+          <ModalGerarMemoriaCalculo
+            imovelId={imovel.id}
+            onClose={() => setModalMemoriaAberto(false)}
+            onGerado={recarregarDespesas}
           />
         </ModalContainer>
       )}

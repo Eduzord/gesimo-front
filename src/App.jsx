@@ -12,6 +12,7 @@ import DetalhesLocador from './pages/Locadores/detalhes';
 import Agendamentos from './pages/Agendamentos';
 import Irrf from './pages/Irrf';
 import GerenciarIrrf from './pages/Irrf/gerenciar';
+import ContasBancarias from './pages/ContasBancarias';
 import ProtectedRoute from './components/ProtectedRoute';
 
 export default function App() {
@@ -46,6 +47,9 @@ export default function App() {
         {/* <!-- Tabelas IRRF: consulta para todos; edição só para ADMIN --> */}
         <Route path="/irrf" element={<ProtectedRoute><Irrf /></ProtectedRoute>} />
         <Route path="/irrf/gerenciar" element={<ProtectedRoute role="ADMIN"><GerenciarIrrf /></ProtectedRoute>} />
+
+        {/* <!-- Contas bancárias: CRUD aberto a qualquer usuário autenticado --> */}
+        <Route path="/contas-bancarias" element={<ProtectedRoute><ContasBancarias /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   );
