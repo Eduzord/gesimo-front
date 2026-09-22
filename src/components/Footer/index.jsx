@@ -9,7 +9,7 @@ export default function Footer() {
         <Home size={24} className="text-blue-600" />
         <span>GESIMO</span>
       </div>
-      <p className="text-xs text-gray-400">© 2026, Alunos da Faculdade Senac</p>
+      <p className="text-xs text-gray-400">© 2026, Eduardo Oliveira</p>
     </footer>
   );
 }
