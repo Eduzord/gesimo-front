@@ -299,6 +299,10 @@ export default function ModalGerarMemoriaCalculo({ imovelId, onClose, onGerado }
                 </div>
               ))}
             </div>
+            <p className="mt-2 text-xs text-gray-400">
+              O nº de dependentes só define o IRRF de cada locador, exibido na memória como retenção a
+              aplicar no repasse — o valor cobrado do locatário não é reduzido por ele.
+            </p>
           </section>
 
           <section>
