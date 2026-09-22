@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom"; // Ferramenta para mudar de página
 import { Eye, EyeOff } from "lucide-react"; // Ícones minimalistas para a senha
 import { api } from "../../services/api";
+import { sincronizarSessao } from "../../utils/auth";
 import estilos from "./login.module.css";
 import logo from "../../assets/logo.png";
 
@@ -47,6 +48,9 @@ export default function Login() {
         
         localStorage.setItem('@gesimo:nome', nomeUsuario);
         localStorage.setItem('@gesimo:role', roleUsuario);
+
+        // O login só devolve o token: nome e papel reais vêm do payload do JWT e prevalecem sobre os padrões acima
+        sincronizarSessao();
 
         // Autoriza e redireciona para o Dashboard
         navegar("/dashboard");

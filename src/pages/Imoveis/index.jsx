@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from 'react-router-dom';
 import { Plus, Home, Eye, Edit2, FileText, Trash2, AlertTriangle } from "lucide-react"; 
 import Sidebar from "../../components/Sidebar";
@@ -12,6 +12,7 @@ import FormularioImovel from "../../components/Formularios/FormularioImovel";
 import FormularioEdicaoImovel from "../../components/Formularios/FormularioEdicaoImovel";
 import MenuAcoes from "../../components/MenuAcoes";
 import { api } from "../../services/api";
+import { correspondeABusca } from "../../utils/busca";
 
 export default function Imoveis() {
   const navigate = useNavigate();
@@ -23,6 +24,7 @@ export default function Imoveis() {
 
   const [nomeUsuario, setNomeUsuario] = useState("");
   const [imoveis, setImoveis] = useState([]);
+  const [termoBusca, setTermoBusca] = useState("");
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
   const [modalAberto, setModalAberto] = useState(false);
@@ -109,8 +111,9 @@ export default function Imoveis() {
               <MenuAcoes 
                 opcoes={[
                   { 
-                    label: 'Visualizar', 
-                    icon: Eye, 
+                    label: 'Visualizar',
+                    icon: Eye,
+                    atalho: true,
                     onClick: () => navigate(`/imoveis/${imovel.id}`) 
                   },
                   { 
@@ -153,6 +156,26 @@ export default function Imoveis() {
     localStorage.setItem("@gesimo:menuAberto", JSON.stringify(menuAberto));
   }, [menuAberto]);
 
+  // O catálogo já vem completo do servidor, então o filtro roda em memória a cada tecla (sem novas requisições)
+  const imoveisFiltrados = useMemo(
+    () =>
+      imoveis.filter((imovel) =>
+        correspondeABusca(termoBusca, [
+          imovel.tipoExibicao,
+          imovel.endereco?.rua,
+          imovel.endereco?.numero,
+          imovel.endereco?.bairro,
+          imovel.endereco?.cidade,
+          imovel.endereco?.estado,
+          imovel.endereco?.cep,
+          imovel.status,
+          imovel.inscricaoIPTU,
+          imovel.inscricaoBombeiro,
+        ]),
+      ),
+    [imoveis, termoBusca],
+  );
+
   const botaoNovoImovel = (
     <Button variant="primary" icon={Plus} onClick={() => { setImovelEdicao(null); setModalAberto(true); }}>
       Novo Imóvel
@@ -172,12 +195,19 @@ export default function Imoveis() {
 
           <DataTable
             colunas={colunasDaTabela}
-            dados={imoveis}
+            dados={imoveisFiltrados}
             paginaAtual={paginaAtual}
             totalPaginas={totalPaginas}
             onPageChange={(nova) => setPaginaAtual(nova)}
-            placeholderBusca="Buscar por endereço ou tipo..."
+            placeholderBusca="Buscar por endereço, bairro, tipo ou status"
             botaoAcao={botaoNovoImovel}
+            onSearch={setTermoBusca}
+            totalResultados={imoveisFiltrados.length}
+            mensagemVazia={
+              termoBusca.trim()
+                ? `Nenhum imóvel encontrado para "${termoBusca.trim()}".`
+                : "Nenhum registro encontrado."
+            }
           />
           <Footer />
         </main>

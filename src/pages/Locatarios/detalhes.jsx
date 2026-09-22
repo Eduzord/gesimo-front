@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, MapPin, User, Mail, Phone, FileText } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, MapPin, User, Mail, Phone, FileText, Plus, Receipt, Calculator } from 'lucide-react';
 import Sidebar from '../../components/Sidebar';
 import Header from '../../components/Header';
 import Button from '../../components/Button';
+import Badge from '../../components/Badge';
 import FormularioLocatario from '../../components/Formularios/FormularioLocatario';
+import FormularioVincularImovel from '../../components/Formularios/FormularioVincularImovel';
 import ModalContainer from '../../components/ModalContainer';
 import { api } from '../../services/api';
+import { enderecoDoImovel, nomeDoLocatario } from '../../utils/posse';
 
 export default function DetalhesLocatario() {
   const { id } = useParams();
@@ -17,6 +20,8 @@ export default function DetalhesLocatario() {
   const [locatario, setLocatario] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [modalEdicaoAberto, setModalEdicaoAberto] = useState(isEditInit);
+  const [modalVincularAberto, setModalVincularAberto] = useState(false);
+  const [contratos, setContratos] = useState([]);
 
   const [nomeUsuario, setNomeUsuario] = useState("");
   const [menuAberto, setMenuAberto] = useState(() => {
@@ -45,6 +50,24 @@ export default function DetalhesLocatario() {
   useEffect(() => {
     if (id) carregarDetalhes();
   }, [id]);
+
+  // O locatário só se liga a um imóvel por meio de contratos de locação
+  const carregarContratos = async () => {
+    try {
+      const resposta = await api.get('/imoveis/contratos', { params: { idLocatario: id } });
+      const dados = resposta.data?.data || resposta.data || [];
+      setContratos(Array.isArray(dados) ? dados : []);
+    } catch (erro) {
+      console.error("Erro ao carregar contratos do locatário:", erro);
+    }
+  };
+
+  useEffect(() => {
+    if (id) carregarContratos();
+  }, [id]);
+
+  const formatarData = (data) => (data ? new Date(data).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-');
+  const contratosAtivos = contratos.filter((c) => c.status === 'ATIVO');
 
   const handleDelete = async () => {
     if (window.confirm("Deseja realmente apagar (inativar) este locatário?")) {
@@ -128,7 +151,10 @@ export default function DetalhesLocatario() {
                   </span>
                 </div>
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap justify-end gap-3">
+                {/* Ações ainda não implementadas */}
+                <Button variant="outline" icon={Receipt}>Gerar Recibo de Aluguel</Button>
+                <Button variant="outline" icon={Calculator}>Gerar Memória de Cálculo</Button>
                 <Button variant="secondary" icon={Edit} onClick={() => setModalEdicaoAberto(true)}>Editar</Button>
                 <Button variant="primary" icon={Trash2} onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white border-none">Apagar</Button>
                 {localStorage.getItem("@gesimo:role") === "ADMIN" && (
@@ -152,8 +178,61 @@ export default function DetalhesLocatario() {
               </div>
               <div className="space-y-3 text-sm">
                 <div className="flex items-center gap-2 text-gray-500 mb-1"><FileText size={16}/><span>Contratos</span></div>
-                <div className="font-medium text-gray-900">{locatario.contratosCount || 0} vinculados</div>
+                <div className="font-medium text-gray-900">{contratosAtivos.length} ativos</div>
               </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg font-semibold text-gray-900">Imóveis / contratos</h2>
+              <Button variant="primary" icon={Plus} onClick={() => setModalVincularAberto(true)}>
+                Vincular a imóvel
+              </Button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-gray-500 uppercase bg-gray-50/50 border-b border-gray-100">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Imóvel</th>
+                    <th className="px-4 py-3 font-medium">Valor Aluguel</th>
+                    <th className="px-4 py-3 font-medium">Início</th>
+                    <th className="px-4 py-3 font-medium">Fim</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {contratos.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-4 text-gray-500 italic">
+                        Nenhum imóvel vinculado a este locatário.
+                      </td>
+                    </tr>
+                  ) : (
+                    contratos.map((contrato) => (
+                      <tr key={contrato.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-4 py-4">
+                          <button
+                            onClick={() => navigate(`/imoveis/${contrato.idImovel}`)}
+                            className="text-blue-600 hover:text-blue-800 font-medium text-left"
+                          >
+                            {enderecoDoImovel(contrato.imovel || { id: contrato.idImovel })}
+                          </button>
+                        </td>
+                        <td className="px-4 py-4 text-gray-900 font-medium">
+                          {Number(contrato.valorAluguel).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </td>
+                        <td className="px-4 py-4 text-gray-500">{formatarData(contrato.dataInicio)}</td>
+                        <td className="px-4 py-4 text-gray-500">{formatarData(contrato.dataFim)}</td>
+                        <td className="px-4 py-4">
+                          <Badge variant={contrato.status}>{contrato.status}</Badge>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </main>
@@ -162,6 +241,19 @@ export default function DetalhesLocatario() {
       <ModalContainer isOpen={modalEdicaoAberto} onClose={() => setModalEdicaoAberto(false)} title="Editar Locatário">
         <FormularioLocatario initialData={locatario} onClose={() => setModalEdicaoAberto(false)} onSuccess={carregarDetalhes} />
       </ModalContainer>
+
+      {modalVincularAberto && (
+        <ModalContainer isOpen={modalVincularAberto} onClose={() => setModalVincularAberto(false)} title="Vincular locatário a um imóvel">
+          <FormularioVincularImovel
+            locatario={{ id: locatario.id, nome: nomeDoLocatario(locatario) }}
+            onClose={() => setModalVincularAberto(false)}
+            onSuccess={() => {
+              setModalVincularAberto(false);
+              carregarContratos();
+            }}
+          />
+        </ModalContainer>
+      )}
     </div>
   );
 }

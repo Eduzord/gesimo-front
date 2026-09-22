@@ -1,6 +1,12 @@
 import React, { useState } from "react";
 import Button from "../Button";
 import { api } from "../../services/api";
+import SeletorProprietarios, {
+  calcularTotalPercentual,
+  proprietariosSaoValidos,
+} from "./SeletorProprietarios";
+import ModalConfirmacaoPosse from "./ModalConfirmacaoPosse";
+import { mensagemDeErro } from "../../utils/posse";
 
 // Reutilizamos o InputGroup com a mesma estética limpa
 const InputGroup = ({
@@ -58,6 +64,8 @@ const SelectGroup = ({ label, name, required, value, onChange, options }) => (
 export default function FormularioImovel({ onClose, onSuccess, initialData }) {
   const [loading, setLoading] = useState(false);
   const [enderecoBloqueado, setEnderecoBloqueado] = useState(false);
+  const [proprietarios, setProprietarios] = useState([]);
+  const [modalPosseAberto, setModalPosseAberto] = useState(false);
 
   // O estado reflete exatamente os nomes esperados pelo DTO
   const [formData, setFormData] = useState({
@@ -106,6 +114,16 @@ export default function FormularioImovel({ onClose, onSuccess, initialData }) {
         cidade: initialData.endereco?.cidade || "",
         estado: initialData.endereco?.estado || "",
       });
+
+      if (Array.isArray(initialData.propriedadeimovel)) {
+        setProprietarios(
+          initialData.propriedadeimovel.map((p) => ({
+            idLocador: p.idLocador,
+            nomeLocador: "",
+            percentualParticipacao: String(p.percentualParticipacao),
+          })),
+        );
+      }
     }
   }, [initialData]);
 
@@ -141,40 +159,47 @@ export default function FormularioImovel({ onClose, onSuccess, initialData }) {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const montarPayload = () => {
+    // Se tiver complemento, junta com a rua para contornar a ausência da coluna no banco
+    const ruaFormatada = formData.complemento
+      ? `${formData.rua} - ${formData.complemento}`
+      : formData.rua;
+
+    // Montamos o Payload EXATAMENTE como o DTO `CriarImovelDto` exige
+    return {
+      ...(formData.inscricaoIPTU && {
+        inscricaoIPTU: formData.inscricaoIPTU,
+      }),
+      ...(formData.inscricaoBombeiro && {
+        inscricaoBombeiro: formData.inscricaoBombeiro,
+      }),
+      ...(formData.metragem && { metragem: formData.metragem }),
+      classificacao: formData.classificacao,
+      tipologia: formData.tipologia,
+      status: formData.status,
+
+      // O Endereço vai como um objeto aninhado
+      endereco: {
+        rua: ruaFormatada,
+        numero: formData.numero || "S/N",
+        bairro: formData.bairro,
+        cidade: formData.cidade,
+        estado: formData.estado,
+        cep: formData.cep,
+      },
+
+      // Lista de locadores donos do imóvel e seus percentuais de participação
+      proprietarios: proprietarios.map((p) => ({
+        idLocador: Number(p.idLocador),
+        percentualParticipacao: Number(String(p.percentualParticipacao).replace(",", ".")),
+      })),
+    };
+  };
+
+  const salvar = async () => {
     setLoading(true);
-
     try {
-      // Se tiver complemento, junta com a rua para contornar a ausência da coluna no banco
-      const ruaFormatada = formData.complemento
-        ? `${formData.rua} - ${formData.complemento}`
-        : formData.rua;
-
-      // Montamos o Payload EXATAMENTE como o DTO `CriarImovelDto` exige
-      const payload = {
-        ...(formData.inscricaoIPTU && {
-          inscricaoIPTU: formData.inscricaoIPTU,
-        }),
-        ...(formData.inscricaoBombeiro && {
-          inscricaoBombeiro: formData.inscricaoBombeiro,
-        }),
-        ...(formData.metragem && { metragem: formData.metragem }),
-        classificacao: formData.classificacao,
-        tipologia: formData.tipologia,
-        status: formData.status,
-
-        // O Endereço vai como um objeto aninhado
-        endereco: {
-          rua: ruaFormatada,
-          numero: formData.numero || "S/N",
-          bairro: formData.bairro,
-          cidade: formData.cidade,
-          estado: formData.estado,
-          cep: formData.cep,
-        },
-      };
-
+      const payload = montarPayload();
       const token = localStorage.getItem("@gesimo:token");
       if (initialData && initialData.id) {
         await api.patch(`/imoveis/${initialData.id}`, payload, {
@@ -191,10 +216,36 @@ export default function FormularioImovel({ onClose, onSuccess, initialData }) {
     } catch (error) {
       console.error("🚨 ERRO DO BACK-END:");
       console.error(error.response?.data);
-      alert("Ocorreu um erro ao salvar o imóvel. Verifique o console.");
+      alert(mensagemDeErro(error, "Ocorreu um erro ao salvar o imóvel. Verifique o console."));
     } finally {
       setLoading(false);
+      setModalPosseAberto(false);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!proprietariosSaoValidos(proprietarios)) {
+      alert(
+        "Cada proprietário adicionado precisa ter um locador escolhido na lista e um percentual de participação maior que zero.",
+      );
+      return;
+    }
+
+    const totalPosse = Math.round(calcularTotalPercentual(proprietarios) * 100) / 100;
+
+    if (totalPosse > 100) {
+      alert("A soma dos percentuais de participação não pode exceder 100%. Ajuste os valores para continuar.");
+      return;
+    }
+
+    if (proprietarios.length > 0 && totalPosse < 100) {
+      setModalPosseAberto(true);
+      return;
+    }
+
+    await salvar();
   };
 
   return (
@@ -361,6 +412,9 @@ export default function FormularioImovel({ onClose, onSuccess, initialData }) {
         </div>
       </div>
 
+      {/* SEÇÃO: Proprietários (Posse Partilhada) */}
+      <SeletorProprietarios proprietarios={proprietarios} onChange={setProprietarios} />
+
       {/* FOOTER */}
       <div className="flex justify-end gap-3 pt-4 border-t mt-2">
         <Button
@@ -375,6 +429,14 @@ export default function FormularioImovel({ onClose, onSuccess, initialData }) {
           {loading ? "Salvando..." : "Salvar Imóvel"}
         </Button>
       </div>
+
+      <ModalConfirmacaoPosse
+        isOpen={modalPosseAberto}
+        totalPercentual={Math.round(calcularTotalPercentual(proprietarios) * 100) / 100}
+        loading={loading}
+        onCancelar={() => setModalPosseAberto(false)}
+        onConfirmar={salvar}
+      />
     </form>
   );
 }

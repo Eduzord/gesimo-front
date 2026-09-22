@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { UploadCloud, FileText, Edit, MapPin, ArrowLeft, Trash2, AlertCircle } from "lucide-react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { UploadCloud, FileText, Edit, MapPin, ArrowLeft, Trash2, AlertCircle, UserPlus, Calculator } from "lucide-react";
 import Sidebar from "../../components/Sidebar";
 import Header from "../../components/Header";
 import Badge from "../../components/Badge";
@@ -8,19 +8,35 @@ import Button from "../../components/Button";
 import ModalContainer from "../../components/ModalContainer";
 import FormularioEdicaoImovel from "../../components/Formularios/FormularioEdicaoImovel";
 import FormularioContrato from "../../components/Formularios/FormularioContrato";
-import FormularioDespesa from "../../components/Formularios/FormularioDespesas"; 
+import FormularioDespesa from "../../components/Formularios/FormularioDespesas";
+import EditorPosseImovel from "../../components/Formularios/EditorPosseImovel";
 import { api } from "../../services/api";
+import {
+  formatarPercentual,
+  nomeDoLocador,
+  nomeDoLocatario,
+  proprietariosParaEstado,
+  somaPosse,
+} from "../../utils/posse";
 
 export default function DetalhesImovel() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isEditInit = new URLSearchParams(location.search).get("edit") === "true";
 
   const [imovel, setImovel] = useState(null);
   const [carregando, setCarregando] = useState(true);
-  const [abaAtiva, setAbaAtiva] = useState("contratos");
-  const [modalEdicaoAberto, setModalEdicaoAberto] = useState(false);
+  const [abaAtiva, setAbaAtiva] = useState("visao-geral");
+  const [modalEdicaoAberto, setModalEdicaoAberto] = useState(isEditInit);
   const [modalContratoAberto, setModalContratoAberto] = useState(false);
   const [modalDespesaAberto, setModalDespesaAberto] = useState(false);
+  const [modalPosseAberto, setModalPosseAberto] = useState(false);
+  const [contratos, setContratos] = useState([]);
+  const [contratoEmEdicao, setContratoEmEdicao] = useState(null);
+  // Nomes resolvidos por ID (o imóvel e o contrato só guardam idLocador/idLocatario)
+  const [nomesLocadores, setNomesLocadores] = useState({});
+  const [nomesLocatarios, setNomesLocatarios] = useState({});
 
   const [nomeUsuario, setNomeUsuario] = useState("");
   const [menuAberto, setMenuAberto] = useState(() => {
@@ -59,6 +75,72 @@ export default function DetalhesImovel() {
 
     if (id) carregarDetalhes();
   }, [id]);
+
+  useEffect(() => {
+    const carregarContratos = async () => {
+      try {
+        const token = localStorage.getItem("@gesimo:token");
+        const resposta = await api.get("/imoveis/contratos", {
+          headers: { Authorization: `Bearer ${token}` },
+          params: { idImovel: id },
+        });
+        const dados = resposta.data.data || resposta.data || [];
+        setContratos(Array.isArray(dados) ? dados : []);
+      } catch (erro) {
+        console.error("Erro ao carregar contratos do imóvel:", erro);
+      }
+    };
+
+    if (id) carregarContratos();
+  }, [id]);
+
+  // Resolve os nomes de locadores (proprietários + locadores dos contratos) e locatários dos contratos
+  useEffect(() => {
+    if (!imovel) return;
+
+    const idsLocadores = [
+      ...new Set([
+        ...(imovel.propriedadeimovel || []).map((p) => String(p.idLocador)),
+        ...contratos.map((c) => String(c.idLocador)),
+      ]),
+    ];
+    const idsLocatarios = [...new Set(contratos.map((c) => String(c.idLocatario)))];
+
+    const buscarNomes = async (ids, rota, obterNome) => {
+      const pares = await Promise.all(
+        ids.map(async (idBuscado) => {
+          try {
+            const resposta = await api.get(`${rota}/${idBuscado}`);
+            return [idBuscado, obterNome(resposta.data.data || resposta.data)];
+          } catch {
+            return [idBuscado, ""];
+          }
+        }),
+      );
+      return Object.fromEntries(pares);
+    };
+
+    buscarNomes(idsLocadores, "/locadores", nomeDoLocador).then(setNomesLocadores);
+    buscarNomes(idsLocatarios, "/locatarios", nomeDoLocatario).then(setNomesLocatarios);
+  }, [imovel, contratos]);
+
+  const nomeLocador = (idLocador) => nomesLocadores[String(idLocador)] || `Locador #${idLocador}`;
+  const nomeLocatario = (idLocatario) => nomesLocatarios[String(idLocatario)] || `Locatário #${idLocatario}`;
+
+  const formatarData = (data) => {
+    if (!data) return "-";
+    return new Date(data).toLocaleDateString("pt-BR", { timeZone: "UTC" });
+  };
+
+  const formatarComissao = (comissao) => {
+    if (comissao === undefined || comissao === null) return "-";
+    return `${(Number(comissao) * 100).toFixed(2).replace(".", ",")}%`;
+  };
+
+  const abrirEdicaoContrato = (contrato) => {
+    setContratoEmEdicao(contrato);
+    setModalContratoAberto(true);
+  };
 
   const handleDelete = async () => {
     if (window.confirm("Deseja realmente apagar este imóvel?")) {
@@ -108,6 +190,41 @@ export default function DetalhesImovel() {
       </div>
     );
 
+  const proprietarios = imovel.propriedadeimovel || [];
+  const totalPosse = somaPosse(proprietarios);
+  const contratoAtivo = contratos.find((c) => c.status === "ATIVO");
+
+  // Locatário só entra por contrato: o imóvel precisa estar livre e ter proprietários para o contrato apontar um deles
+  let motivoSemLocatario = "";
+  if (proprietarios.length === 0) {
+    motivoSemLocatario = "Vincule ao menos um locador proprietário antes de vincular um locatário.";
+  } else if (imovel.status !== "DISPONIVEL") {
+    motivoSemLocatario = `O imóvel está ${formatarPalavra(imovel.status)}. Só é possível vincular um locatário a um imóvel disponível.`;
+  }
+
+  const resumoLocadores =
+    proprietarios.length === 0
+      ? "Não vinculado"
+      : proprietarios.length === 1
+        ? nomeLocador(proprietarios[0].idLocador)
+        : `${nomeLocador(proprietarios[0].idLocador)} +${proprietarios.length - 1}`;
+
+  // Locador do contrato precisa poder ser escolhido entre os proprietários (com nome resolvido)
+  const proprietariosParaContrato = proprietarios.map((p) => ({
+    id: p.idLocador,
+    nome: nomeLocador(p.idLocador),
+    percentual: p.percentualParticipacao,
+  }));
+
+  // Sempre parte da posse atual e deixa uma linha vazia pronta para o novo locador
+  const proprietariosIniciaisModal = [
+    ...proprietariosParaEstado(proprietarios).map((p) => ({
+      ...p,
+      nomeLocador: nomesLocadores[String(p.idLocador)] || "",
+    })),
+    { idLocador: "", nomeLocador: "", percentualParticipacao: "" },
+  ];
+
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
       <Sidebar
@@ -147,7 +264,9 @@ export default function DetalhesImovel() {
                   </span>
                 </div>
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap justify-end gap-3">
+                {/* Ação ainda não implementada */}
+                <Button variant="outline" icon={Calculator}>Gerar Memória de Cálculo</Button>
                 <Button
                   variant="secondary"
                   icon={Edit}
@@ -180,14 +299,12 @@ export default function DetalhesImovel() {
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Locador</span>
-                  <span className="font-medium text-gray-900">
-                    {imovel.locador?.nome || "Não vinculado"}
-                  </span>
+                  <span className="font-medium text-gray-900">{resumoLocadores}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Locatário</span>
                   <span className="font-medium text-gray-900">
-                    {imovel.locatario?.nome || "Não vinculado"}
+                    {contratoAtivo ? nomeLocatario(contratoAtivo.idLocatario) : "Não vinculado"}
                   </span>
                 </div>
               </div>
@@ -227,6 +344,131 @@ export default function DetalhesImovel() {
             </nav>
           </div>
 
+          {/* === ABA VISÃO GERAL: posse (locadores) e locatário atual === */}
+          {abaAtiva === "visao-geral" && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Proprietários (Posse Partilhada)
+                  </h2>
+                  <Button variant="primary" icon={UserPlus} onClick={() => setModalPosseAberto(true)}>
+                    Vincular locador
+                  </Button>
+                </div>
+
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-gray-500 uppercase bg-gray-50/50 border-b border-gray-100">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Locador</th>
+                      <th className="px-4 py-3 font-medium text-right">Participação</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {proprietarios.length === 0 ? (
+                      <tr>
+                        <td colSpan={2} className="px-4 py-4 text-gray-500 italic">
+                          Nenhum locador vinculado a este imóvel.
+                        </td>
+                      </tr>
+                    ) : (
+                      proprietarios.map((p) => (
+                        <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => navigate(`/locadores/${p.idLocador}`)}
+                              className="text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              {nomeLocador(p.idLocador)}
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 text-right text-gray-900 font-medium">
+                            {formatarPercentual(p.percentualParticipacao)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+
+                {proprietarios.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Total da posse</span>
+                    <span
+                      className={`font-bold ${
+                        totalPosse === 100 ? "text-green-600" : "text-amber-500"
+                      }`}
+                    >
+                      {formatarPercentual(totalPosse)}
+                      {totalPosse < 100 && ` · faltam ${formatarPercentual(100 - totalPosse)}`}
+                      {totalPosse === 100 && " · completo"}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900">Locatário Atual</h2>
+                  <span title={motivoSemLocatario}>
+                    <Button
+                      variant="primary"
+                      icon={UserPlus}
+                      disabled={Boolean(motivoSemLocatario)}
+                      onClick={() => {
+                        setContratoEmEdicao(null);
+                        setModalContratoAberto(true);
+                      }}
+                    >
+                      Vincular locatário
+                    </Button>
+                  </span>
+                </div>
+
+                {motivoSemLocatario && (
+                  <p className="text-xs text-gray-500 mb-4">{motivoSemLocatario}</p>
+                )}
+
+                {contratoAtivo ? (
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Locatário</span>
+                      <button
+                        onClick={() => navigate(`/locatarios/${contratoAtivo.idLocatario}`)}
+                        className="text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        {nomeLocatario(contratoAtivo.idLocatario)}
+                      </button>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Locador do contrato</span>
+                      <span className="font-medium text-gray-900">
+                        {nomeLocador(contratoAtivo.idLocador)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Aluguel</span>
+                      <span className="font-medium text-gray-900">
+                        {Number(contratoAtivo.valorAluguel).toLocaleString("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Vigência</span>
+                      <span className="font-medium text-gray-900">
+                        {formatarData(contratoAtivo.dataInicio)} até {formatarData(contratoAtivo.dataFim)}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 italic">Nenhum locatário vinculado no momento.</p>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Área principal das Abas */}
           {(abaAtiva === "contratos" || abaAtiva === "despesas") && (
             <div className="flex gap-6">
@@ -250,24 +492,69 @@ export default function DetalhesImovel() {
                     <table className="w-full text-sm text-left">
                       <thead className="text-xs text-gray-500 uppercase bg-gray-50/50 border-b border-gray-100">
                         <tr>
-                          <th className="px-4 py-3 font-medium">Nome do arquivo</th>
-                          <th className="px-4 py-3 font-medium">Data</th>
-                          <th className="px-4 py-3 font-medium">Tamanho</th>
+                          <th className="px-4 py-3 font-medium">Locador</th>
+                          <th className="px-4 py-3 font-medium">Locatário</th>
+                          <th className="px-4 py-3 font-medium">Valor Aluguel</th>
+                          <th className="px-4 py-3 font-medium">Comissão</th>
+                          <th className="px-4 py-3 font-medium">Início</th>
+                          <th className="px-4 py-3 font-medium">Fim</th>
+                          <th className="px-4 py-3 font-medium">Status</th>
                           <th className="px-4 py-3 font-medium text-right">Ações</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        <tr className="hover:bg-gray-50/50 transition-colors group">
-                          <td className="px-4 py-4 flex items-center gap-3">
-                            <FileText size={18} className="text-gray-400" />
-                            <span className="font-medium text-gray-500">
-                              Nenhum arquivo encontrado...
-                            </span>
-                          </td>
-                          <td className="px-4 py-4 text-gray-500">-</td>
-                          <td className="px-4 py-4 text-gray-500">-</td>
-                          <td className="px-4 py-4 text-right"></td>
-                        </tr>
+                        {contratos.length === 0 ? (
+                          <tr className="hover:bg-gray-50/50 transition-colors group">
+                            <td className="px-4 py-4 flex items-center gap-3" colSpan={8}>
+                              <FileText size={18} className="text-gray-400" />
+                              <span className="font-medium text-gray-500">
+                                Nenhum contrato encontrado...
+                              </span>
+                            </td>
+                          </tr>
+                        ) : (
+                          contratos.map((contrato) => (
+                            <tr
+                              key={contrato.id}
+                              className="hover:bg-gray-50/50 transition-colors group"
+                            >
+                              <td className="px-4 py-4 text-gray-900">
+                                {nomeLocador(contrato.idLocador)}
+                              </td>
+                              <td className="px-4 py-4 text-gray-900">
+                                {nomeLocatario(contrato.idLocatario)}
+                              </td>
+                              <td className="px-4 py-4 text-gray-900 font-medium">
+                                {Number(contrato.valorAluguel).toLocaleString("pt-BR", {
+                                  style: "currency",
+                                  currency: "BRL",
+                                })}
+                              </td>
+                              <td className="px-4 py-4 text-gray-900">
+                                {formatarComissao(contrato.comissao)}
+                              </td>
+                              <td className="px-4 py-4 text-gray-500">
+                                {formatarData(contrato.dataInicio)}
+                              </td>
+                              <td className="px-4 py-4 text-gray-500">
+                                {formatarData(contrato.dataFim)}
+                              </td>
+                              <td className="px-4 py-4">
+                                <Badge variant={contrato.status}>
+                                  {formatarPalavra(contrato.status)}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-4 text-right">
+                                <button
+                                  onClick={() => abrirEdicaoContrato(contrato)}
+                                  className="text-blue-600 hover:text-blue-800 font-medium text-xs"
+                                >
+                                  Editar
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -370,14 +657,42 @@ export default function DetalhesImovel() {
       {modalContratoAberto && (
         <ModalContainer
           isOpen={modalContratoAberto}
-          onClose={() => setModalContratoAberto(false)}
-          title="Novo Contrato de Locação"
+          onClose={() => {
+            setModalContratoAberto(false);
+            setContratoEmEdicao(null);
+          }}
+          title={contratoEmEdicao ? "Editar Contrato" : "Novo Contrato de Locação"}
         >
           <FormularioContrato
             imovelId={imovel.id}
-            onClose={() => setModalContratoAberto(false)}
+            contrato={contratoEmEdicao}
+            proprietarios={proprietariosParaContrato}
+            onClose={() => {
+              setModalContratoAberto(false);
+              setContratoEmEdicao(null);
+            }}
             onSuccess={() => {
               setModalContratoAberto(false);
+              setContratoEmEdicao(null);
+              window.location.reload();
+            }}
+          />
+        </ModalContainer>
+      )}
+
+      {modalPosseAberto && (
+        <ModalContainer
+          isOpen={modalPosseAberto}
+          onClose={() => setModalPosseAberto(false)}
+          title="Vincular locador ao imóvel"
+        >
+          <EditorPosseImovel
+            imovelId={imovel.id}
+            proprietariosIniciais={proprietariosIniciaisModal}
+            textoConfirmar="Salvar posse"
+            onClose={() => setModalPosseAberto(false)}
+            onSuccess={() => {
+              setModalPosseAberto(false);
               window.location.reload();
             }}
           />

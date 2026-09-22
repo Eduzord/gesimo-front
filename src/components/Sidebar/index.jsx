@@ -1,6 +1,7 @@
 import React from "react";
-import { LayoutDashboard, Users, LogOut, Menu, Home, Calendar } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, Menu, Home, Calendar, Percent, Settings } from "lucide-react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
+import { isAdmin } from "../../utils/auth";
 
 export default function Sidebar({ menuAberto, setMenuAberto, nome }) {
   const location = useLocation();
@@ -13,18 +14,22 @@ export default function Sidebar({ menuAberto, setMenuAberto, nome }) {
     // 1. Limpa os dados do usuário do navegador
     localStorage.removeItem("@gesimo:token");
     localStorage.removeItem("@gesimo:nome");
-    
+    localStorage.removeItem("@gesimo:role");
+
     // 2. Redireciona para a tela de login
     navigate("/"); 
   };
 
+  // "adminOnly: true" esconde o item de quem não é ADMIN (a rota também é protegida em App.jsx)
   const navLinks = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: Users, label: "Locadores", path: "/locadores" },
     { icon: Users, label: "Locatários", path: "/locatarios" },
     { icon: Home, label: "Imóveis", path: "/imoveis" },
-    { icon: Calendar, label: "Agenda", path: "/agendamentos"}
-  ];
+    { icon: Calendar, label: "Agenda", path: "/agendamentos"},
+    { icon: Percent, label: "Tabelas IRRF", path: "/irrf" },
+    { icon: Settings, label: "Gerenciar IRRF", path: "/irrf/gerenciar", adminOnly: true },
+  ].filter((link) => !link.adminOnly || isAdmin());
 
   return (
     <aside

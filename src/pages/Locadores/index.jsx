@@ -1,5 +1,5 @@
 // src/pages/Locadores/index.jsx
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Eye, Edit, Trash2, AlertTriangle } from "lucide-react";
 import Sidebar from "../../components/Sidebar";
@@ -11,6 +11,7 @@ import ModalContainer from "../../components/ModalContainer"; // Importe o conta
 import FormularioLocador from "../../components/Formularios/FormularioLocador"; // Importe o formulário
 import MenuAcoes from "../../components/MenuAcoes";
 import { api } from "../../services/api";
+import { correspondeABusca } from "../../utils/busca";
 
 export default function Locadores() {
   const [menuAberto, setMenuAberto] = useState(() => {
@@ -20,6 +21,7 @@ export default function Locadores() {
 
   const [nome, setNome] = useState("");
   const [locadores, setLocadores] = useState([]);
+  const [termoBusca, setTermoBusca] = useState("");
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
   const navigate = useNavigate();
@@ -58,9 +60,8 @@ export default function Locadores() {
   };
 
   const colunasDaTabela = [
-    { key: "nome", label: "Nome" },
-    { key: "cpf", label: "CPF" },
-    { key: "telefone", label: "Telefone" },
+    { key: "nomeExibicao", label: "Nome" },
+    { key: "documentoExibicao", label: "CPF/CNPJ" },
     { key: "email", label: "Email" },
     { key: "imoveis", label: "Imóveis" },
     { key: "acoes", label: "Ações" },
@@ -84,10 +85,12 @@ export default function Locadores() {
 
       const locadoresComAcoes = rawData.map(locador => ({
         ...locador,
+        nomeExibicao: locador.tipoPessoa === "JURIDICA" ? locador.razaoSocial : locador.nome,
+        documentoExibicao: locador.tipoPessoa === "JURIDICA" ? locador.cnpj : locador.cpf,
         acoes: (
           <MenuAcoes
             opcoes={[
-              { label: "Visualizar", icon: Eye, onClick: () => navigate(`/locadores/${locador.id}`) },
+              { label: "Visualizar", icon: Eye, atalho: true, onClick: () => navigate(`/locadores/${locador.id}`) },
               { label: "Editar", icon: Edit, onClick: () => navigate(`/locadores/${locador.id}?edit=true`) },
               { label: "Apagar", icon: Trash2, danger: true, onClick: () => handleDelete(locador.id) },
               ...(isAdmin ? [{ label: "Remoção Definitiva", icon: AlertTriangle, danger: true, onClick: () => handleHardDelete(locador.id) }] : [])
@@ -114,6 +117,21 @@ export default function Locadores() {
 
   const lidarComMudancaDePagina = (novaPagina) => setPaginaAtual(novaPagina);
 
+  // A lista já vem completa do servidor, então o filtro roda em memória a cada tecla (sem novas requisições)
+  const locadoresFiltrados = useMemo(
+    () =>
+      locadores.filter((locador) =>
+        correspondeABusca(termoBusca, [
+          locador.nomeExibicao,
+          locador.nome,
+          locador.razaoSocial,
+          locador.documentoExibicao,
+          locador.email,
+        ]),
+      ),
+    [locadores, termoBusca],
+  );
+
   const botaoNovoLocador = (
     <Button variant="primary" icon={Plus} onClick={() => setModalAberto(true)}>
       Novo Locador
@@ -135,13 +153,19 @@ export default function Locadores() {
 
           <DataTable
             colunas={colunasDaTabela}
-            dados={locadores}
+            dados={locadoresFiltrados}
             paginaAtual={paginaAtual}
             totalPaginas={totalPaginas}
             onPageChange={lidarComMudancaDePagina}
-            placeholderBusca="Buscar por nome ou por CPF"
+            placeholderBusca="Buscar por nome, CPF, CNPJ ou e-mail"
             botaoAcao={botaoNovoLocador}
-            onSearch={(termo) => console.log("Buscando por:", termo)}
+            onSearch={setTermoBusca}
+            totalResultados={locadoresFiltrados.length}
+            mensagemVazia={
+              termoBusca.trim()
+                ? `Nenhum locador encontrado para "${termoBusca.trim()}".`
+                : "Nenhum registro encontrado."
+            }
           />
 
           <div className="flex-1"></div>

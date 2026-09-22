@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Search,
-  MoreHorizontal,
+  X,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -13,26 +13,69 @@ export default function DataTable({
   onSearch,
   placeholderBusca = "Buscar...",
   botaoAcao,
-  // AS 3 PROPS QUE FALTAVAM PARA A TELA NÃO FICAR BRANCA:
   paginaAtual = 1,
   totalPaginas = 1,
   onPageChange,
+  // Total de resultados da busca atual (exibido enquanto há termo digitado)
+  totalResultados,
+  // Mensagem do estado vazio; a página pode personalizar quando há busca ativa
+  mensagemVazia = "Nenhum registro encontrado.",
+  // Enquanto uma busca no servidor está em andamento, a tabela fica esmaecida
+  carregando = false,
 }) {
+  const [valorBusca, setValorBusca] = useState("");
+
+  const alterarBusca = (valor) => {
+    setValorBusca(valor);
+    if (onSearch) onSearch(valor);
+  };
+
+  const buscaAtiva = valorBusca.trim() !== "";
+
   return (
     <div className="w-full flex flex-col gap-4">
       {/* 1. BARRA SUPERIOR: Busca e Botões */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-2">
         {/* Input de Busca com Ícone Embutido */}
-        <div className="relative w-full sm:w-96">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search size={18} className="text-gray-400" />
+        <div className="w-full sm:w-96">
+          <div className="relative" role="search">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search size={18} className="text-gray-400" />
+            </div>
+            <input
+              type="text"
+              inputMode="search"
+              autoComplete="off"
+              spellCheck={false}
+              maxLength={100}
+              placeholder={placeholderBusca}
+              aria-label={placeholderBusca}
+              value={valorBusca}
+              onChange={(e) => alterarBusca(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape" && valorBusca) alterarBusca("");
+              }}
+              className="w-full pl-10 pr-9 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all placeholder:text-gray-400"
+            />
+            {valorBusca && (
+              <button
+                type="button"
+                onClick={() => alterarBusca("")}
+                aria-label="Limpar busca"
+                title="Limpar busca (Esc)"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
-          <input
-            type="text"
-            placeholder={placeholderBusca}
-            onChange={(e) => onSearch && onSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all placeholder:text-gray-400"
-          />
+
+          {/* Anuncia a quantidade de resultados para leitores de tela e para quem digita */}
+          <p className="mt-1 h-4 text-xs text-gray-500" role="status" aria-live="polite">
+            {buscaAtiva && totalResultados !== undefined && !carregando
+              ? `${totalResultados} ${totalResultados === 1 ? "resultado" : "resultados"}`
+              : ""}
+          </p>
         </div>
 
         {/* Botão Dinâmico */}
@@ -42,7 +85,12 @@ export default function DataTable({
       </div>
 
       {/* 2. CORPO DA TABELA */}
-      <div className="bg-white border border-gray-100 rounded-xl shadow-sm flex flex-col">
+      <div
+        className={`bg-white border border-gray-100 rounded-xl shadow-sm flex flex-col transition-opacity ${
+          carregando ? "opacity-60" : ""
+        }`}
+        aria-busy={carregando}
+      >
         {/* Removemos o overflow-hidden de cima e adicionamos min-h-[300px] aqui embaixo */}
         <div className="overflow-x-visible overflow-y-visible">
           <table className="w-full text-left border-collapse">
@@ -64,7 +112,7 @@ export default function DataTable({
             <tbody>
               {dados?.map((linha, rowIndex) => (
                 <tr
-                  key={rowIndex}
+                  key={linha.id ?? rowIndex}
                   className="border-b border-gray-50 hover:bg-slate-50 transition-colors last:border-0"
                 >
                   {colunas.map((coluna, colIndex) => (
@@ -72,13 +120,8 @@ export default function DataTable({
                       key={colIndex}
                       className="py-4 px-6 text-sm text-gray-800 whitespace-nowrap"
                     >
-                      <td
-                        key={colIndex}
-                        className="py-4 px-6 text-sm text-gray-800 whitespace-nowrap"
-                      >
-                        {/* O DataTable agora simplesmente renderiza o que a página mandar! */}
-                        {linha[coluna.key]}
-                      </td>
+                      {/* O DataTable agora simplesmente renderiza o que a página mandar! */}
+                      {linha[coluna.key]}
                     </td>
                   ))}
                 </tr>
@@ -91,7 +134,7 @@ export default function DataTable({
                     colSpan={colunas.length}
                     className="py-12 text-center text-sm text-gray-400"
                   >
-                    Nenhum registro encontrado.
+                    {mensagemVazia}
                   </td>
                 </tr>
               )}

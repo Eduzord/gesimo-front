@@ -10,6 +10,8 @@ import Imoveis from './pages/Imoveis';
 import DetalhesImovel from './pages/Imoveis/detalhes';
 import DetalhesLocador from './pages/Locadores/detalhes';
 import Agendamentos from './pages/Agendamentos';
+import Irrf from './pages/Irrf';
+import GerenciarIrrf from './pages/Irrf/gerenciar';
 import ProtectedRoute from './components/ProtectedRoute';
 
 export default function App() {
@@ -40,6 +42,10 @@ export default function App() {
 
         {/* <!-- Rota /agendamentos renderiza o Agendamento --> */}
         <Route path="/agendamentos" element={<ProtectedRoute><Agendamentos /></ProtectedRoute>} />
+
+        {/* <!-- Tabelas IRRF: consulta para todos; edição só para ADMIN --> */}
+        <Route path="/irrf" element={<ProtectedRoute><Irrf /></ProtectedRoute>} />
+        <Route path="/irrf/gerenciar" element={<ProtectedRoute role="ADMIN"><GerenciarIrrf /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   );

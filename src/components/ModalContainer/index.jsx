@@ -2,12 +2,13 @@
 import React from 'react';
 import { X } from 'lucide-react';
 
-export default function ModalContainer({ isOpen, onClose, title, children }) {
+// "largura" recebe uma classe de largura máxima do Tailwind (ex.: "max-w-4xl") para formulários mais largos
+export default function ModalContainer({ isOpen, onClose, title, children, largura = 'max-w-2xl' }) {
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm transition-opacity">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className={`bg-white rounded-2xl shadow-xl w-full ${largura} overflow-hidden flex flex-col max-h-[90vh]`}>
         
         {/* Cabeçalho */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">

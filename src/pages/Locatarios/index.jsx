@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Users, Eye, Edit, Trash2, AlertTriangle } from "lucide-react"; // Usando 'Users' para representar locatários
 import Sidebar from "../../components/Sidebar";
@@ -20,10 +20,30 @@ export default function Locatarios() {
 
   const [nomeUsuario, setNomeUsuario] = useState("");
   const [locatarios, setLocatarios] = useState([]);
-  const [paginaAtual, setPaginaAtual] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
+  const [totalRegistros, setTotalRegistros] = useState(0);
+  const [carregando, setCarregando] = useState(false);
   const [modalAberto, setModalAberto] = useState(false);
   const navigate = useNavigate();
+
+  // A lista é paginada no servidor, então a busca também é feita lá (filtrar só a página atual
+  // esconderia resultados das outras páginas). Página e termo mudam juntos para gerar uma única requisição.
+  const [consulta, setConsulta] = useState({ pagina: 1, busca: "" });
+  const paginaAtual = consulta.pagina;
+  const buscaAtual = consulta.busca;
+  const temporizadorBusca = useRef(null);
+  const ultimaRequisicao = useRef(0);
+
+  // Debounce: só consulta o servidor 350ms depois da última tecla e volta para a página 1
+  const lidarComBusca = (termo) => {
+    clearTimeout(temporizadorBusca.current);
+    temporizadorBusca.current = setTimeout(() => {
+      const busca = termo.trim();
+      setConsulta((atual) => (atual.busca === busca ? atual : { pagina: 1, busca }));
+    }, 350);
+  };
+
+  useEffect(() => () => clearTimeout(temporizadorBusca.current), []);
 
   const handleDelete = async (id) => {
     if (window.confirm("Deseja realmente inativar este locatário? (Soft Delete)")) {
@@ -68,13 +88,20 @@ export default function Locatarios() {
 
   const carregarLocatarios = useCallback(async () => {
     const token = localStorage.getItem("@gesimo:token");
-    
+
+    // Se o usuário continuar digitando, respostas antigas que chegarem depois são descartadas
+    const idRequisicao = ++ultimaRequisicao.current;
+    setCarregando(true);
+
     try {
-      const resposta = await api.get(`/locatarios?page=${paginaAtual}&limit=10`, {
+      const resposta = await api.get("/locatarios", {
+        params: { page: paginaAtual, limit: 10, busca: buscaAtual || undefined },
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
+
+      if (idRequisicao !== ultimaRequisicao.current) return;
 
       const dadosBrutos = resposta.data.data || resposta.data;
       const isAdmin = localStorage.getItem("@gesimo:role") === "ADMIN";
@@ -90,7 +117,7 @@ export default function Locatarios() {
           acoes: (
             <MenuAcoes
               opcoes={[
-                { label: "Visualizar", icon: Eye, onClick: () => navigate(`/locatarios/${loc.id}`) },
+                { label: "Visualizar", icon: Eye, atalho: true, onClick: () => navigate(`/locatarios/${loc.id}`) },
                 { label: "Editar", icon: Edit, onClick: () => navigate(`/locatarios/${loc.id}?edit=true`) },
                 { label: "Apagar", icon: Trash2, danger: true, onClick: () => handleDelete(loc.id) },
                 ...(isAdmin ? [{ label: "Remoção Definitiva", icon: AlertTriangle, danger: true, onClick: () => handleHardDelete(loc.id) }] : [])
@@ -102,10 +129,15 @@ export default function Locatarios() {
 
       setLocatarios(locatariosFormatados);
       setTotalPaginas(resposta.data.meta?.totalPages || 1);
+      setTotalRegistros(resposta.data.meta?.total ?? locatariosFormatados.length);
     } catch (erro) {
-      console.error("Erro ao carregar locatários:", erro);
+      if (idRequisicao === ultimaRequisicao.current) {
+        console.error("Erro ao carregar locatários:", erro);
+      }
+    } finally {
+      if (idRequisicao === ultimaRequisicao.current) setCarregando(false);
     }
-  }, [paginaAtual]);
+  }, [paginaAtual, buscaAtual]);
 
   useEffect(() => {
     setNomeUsuario(localStorage.getItem("@gesimo:nome") || "Usuário");
@@ -142,10 +174,17 @@ export default function Locatarios() {
             dados={locatarios}
             paginaAtual={paginaAtual}
             totalPaginas={totalPaginas}
-            onPageChange={(nova) => setPaginaAtual(nova)}
-            placeholderBusca="Buscar por nome, CPF ou CNPJ"
+            onPageChange={(nova) => setConsulta((atual) => ({ ...atual, pagina: nova }))}
+            placeholderBusca="Buscar por nome, CPF, CNPJ, e-mail ou telefone"
             botaoAcao={botaoNovoLocatario}
-            onSearch={(termo) => console.log("Buscando locatário:", termo)}
+            onSearch={lidarComBusca}
+            totalResultados={totalRegistros}
+            carregando={carregando}
+            mensagemVazia={
+              buscaAtual
+                ? `Nenhum locatário encontrado para "${buscaAtual}".`
+                : "Nenhum registro encontrado."
+            }
           />
 
           <div className="flex-1"></div>

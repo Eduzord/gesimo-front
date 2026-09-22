@@ -2,11 +2,12 @@ import React, { useState, useEffect } from "react";
 import { api } from "../../services/api";
 import Button from "../Button";
 import { Search } from "lucide-react";
+import { mensagemDeErro, nomeDoLocador, nomeDoLocatario, formatarPercentual } from "../../utils/posse";
 
 // ==========================================
 // SUBCOMPONENTE: BUSCADOR COM FILTRO LOCAL
 // ==========================================
-const BuscadorPessoa = ({ label, placeholder, endpoint, onSelecionar }) => {
+const BuscadorPessoa = ({ label, placeholder, endpoint, obterNome, onSelecionar }) => {
   const [busca, setBusca] = useState("");
   const [todosDados, setTodosDados] = useState([]); // Guarda a lista inteira do banco
   const [resultados, setResultados] = useState([]); // Guarda apenas os filtrados
@@ -48,7 +49,7 @@ const BuscadorPessoa = ({ label, placeholder, endpoint, onSelecionar }) => {
 
     // Filtra a lista completa que está na memória
     const filtrados = todosDados.filter(
-      (pessoa) => pessoa.nome && pessoa.nome.toLowerCase().includes(termoBusca),
+      (pessoa) => obterNome(pessoa).toLowerCase().includes(termoBusca),
     );
 
     setResultados(filtrados);
@@ -56,7 +57,7 @@ const BuscadorPessoa = ({ label, placeholder, endpoint, onSelecionar }) => {
 
   const handleSelecionar = (pessoa) => {
     setSelecionado(pessoa);
-    setBusca(pessoa.nome);
+    setBusca(obterNome(pessoa));
     setFoco(false);
     onSelecionar(pessoa.id); // Envia o ID para o formulário pai
   };
@@ -67,7 +68,7 @@ const BuscadorPessoa = ({ label, placeholder, endpoint, onSelecionar }) => {
       <div className="relative">
         <input
           type="text"
-          value={selecionado ? selecionado.nome : busca}
+          value={selecionado ? obterNome(selecionado) : busca}
           onChange={(e) => {
             setBusca(e.target.value);
             setSelecionado(null); // Limpa a seleção se o usuário voltar a digitar
@@ -90,7 +91,7 @@ const BuscadorPessoa = ({ label, placeholder, endpoint, onSelecionar }) => {
               onClick={() => handleSelecionar(pessoa)}
               className="p-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700 border-b border-gray-50 last:border-0"
             >
-              {pessoa.nome}{" "}
+              {obterNome(pessoa)}{" "}
               <span className="text-gray-400 text-xs ml-2">
                 (ID: {pessoa.id})
               </span>
@@ -105,14 +106,25 @@ const BuscadorPessoa = ({ label, placeholder, endpoint, onSelecionar }) => {
 // ==========================================
 // FORMULÁRIO PRINCIPAL
 // ==========================================
-export default function FormularioContrato({ imovelId, onClose, onSuccess }) {
+// "proprietarios": [{ id, nome, percentual }] do imóvel. Quando informado, o locador do contrato
+// só pode ser um deles (regra validada também no backend).
+// "locatarioFixo": { id, nome } quando o contrato é aberto a partir da tela de um locatário.
+export default function FormularioContrato({ imovelId, contrato, proprietarios = [], locatarioFixo, onClose, onSuccess }) {
+  const modoEdicao = Boolean(contrato);
+  const restringirLocador = !modoEdicao && proprietarios.length > 0;
+
   const [formData, setFormData] = useState({
-    idLocador: "",
-    idLocatario: "",
-    dataInicio: "",
-    dataFim: "",
-    dataReajuste: "",
-    valorAluguel: "",
+    idLocador:
+      contrato?.idLocador?.toString() ||
+      (proprietarios.length === 1 ? String(proprietarios[0].id) : ""),
+    idLocatario: contrato?.idLocatario?.toString() || (locatarioFixo ? String(locatarioFixo.id) : ""),
+    dataInicio: contrato?.dataInicio ? contrato.dataInicio.slice(0, 10) : "",
+    dataFim: contrato?.dataFim ? contrato.dataFim.slice(0, 10) : "",
+    dataReajuste: contrato?.dataReajuste ? contrato.dataReajuste.slice(0, 10) : "",
+    valorAluguel: contrato?.valorAluguel ?? "",
+    comissaoPercentual: contrato?.comissao
+      ? String(Number(contrato.comissao) * 100)
+      : "",
   });
 
   const [arquivoSelecionado, setArquivoSelecionado] = useState(null);
@@ -120,6 +132,14 @@ export default function FormularioContrato({ imovelId, onClose, onSuccess }) {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleComissaoChange = (e) => {
+    const { value } = e.target;
+    // Aceita apenas dígitos e um único separador decimal (. ou ,)
+    if (/^[0-9]*[.,]?[0-9]*$/.test(value)) {
+      setFormData((prev) => ({ ...prev, comissaoPercentual: value }));
+    }
   };
 
   const handleFileChange = (e) => {
@@ -130,13 +150,40 @@ export default function FormularioContrato({ imovelId, onClose, onSuccess }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.idLocador || !formData.idLocatario) {
+
+    if (!modoEdicao && (!formData.idLocador || !formData.idLocatario)) {
       alert("Por favor, busque e selecione o Locador e o Locatário na lista.");
+      return;
+    }
+
+    const comissao =
+      Number(String(formData.comissaoPercentual).replace(",", ".")) / 100;
+
+    if (!formData.comissaoPercentual || Number.isNaN(comissao)) {
+      alert("Por favor, informe um valor de comissão válido.");
       return;
     }
 
     try {
       const token = localStorage.getItem("@gesimo:token");
+
+      if (modoEdicao) {
+        // Atualiza os dados de um contrato existente
+        await api.patch(
+          `/imoveis/contratos/${contrato.id}/dados`,
+          {
+            dataInicio: formData.dataInicio,
+            dataFim: formData.dataFim || undefined,
+            dataReajuste: formData.dataReajuste || undefined,
+            valorAluguel: Number(formData.valorAluguel),
+            comissao,
+          },
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+
+        onSuccess();
+        return;
+      }
 
       // 1. Cria o contrato no banco
       const payloadContrato = {
@@ -147,9 +194,10 @@ export default function FormularioContrato({ imovelId, onClose, onSuccess }) {
         dataFim: formData.dataFim || undefined,
         dataReajuste: formData.dataReajuste || undefined,
         valorAluguel: Number(formData.valorAluguel),
+        comissao,
       };
 
-      const respostaContrato = await api.post("/contratos", payloadContrato, {
+      const respostaContrato = await api.post("/imoveis/contratos", payloadContrato, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -161,7 +209,7 @@ export default function FormularioContrato({ imovelId, onClose, onSuccess }) {
         payloadArquivo.append("file", arquivoSelecionado);
 
         await api.patch(
-          `/contratos/${novoContratoId}/arquivo`,
+          `/imoveis/contratos/${novoContratoId}/arquivo`,
           payloadArquivo,
           {
             headers: {
@@ -183,31 +231,88 @@ export default function FormularioContrato({ imovelId, onClose, onSuccess }) {
       // Conclui e recarrega a página (que já vai voltar com a Badge vermelha de "Alugado")
       onSuccess();
     } catch (erro) {
-      console.error("Erro ao criar contrato e atualizar status:", erro);
-      alert("Houve um erro. Verifique o console.");
+      console.error("Erro ao salvar contrato:", erro);
+      alert(mensagemDeErro(erro, "Houve um erro. Verifique o console."));
     }
   };
   return (
     <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-visible">
       <div className="grid grid-cols-2 gap-4">
-        {/* BUSCADORES SUBSTITUINDO OS INPUTS NUMÉRICOS */}
-        <BuscadorPessoa
-          label="Locador (Proprietário)"
-          placeholder="Digite o nome do locador..."
-          endpoint="/locadores"
-          onSelecionar={(id) =>
-            setFormData((prev) => ({ ...prev, idLocador: id }))
-          }
-        />
+        {modoEdicao ? (
+          <>
+            <div>
+              <label className="block text-sm text-gray-700 mb-1">
+                Locador (Proprietário)
+              </label>
+              <div className="w-full p-2 border border-gray-200 bg-gray-50 rounded-lg text-gray-500 text-sm">
+                {contrato.locador?.nome || `ID ${contrato.idLocador}`}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm text-gray-700 mb-1">
+                Locatário (Inquilino)
+              </label>
+              <div className="w-full p-2 border border-gray-200 bg-gray-50 rounded-lg text-gray-500 text-sm">
+                {contrato.locatario?.nome || `ID ${contrato.idLocatario}`}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {restringirLocador ? (
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">
+                  Locador (Proprietário)
+                </label>
+                <select
+                  name="idLocador"
+                  value={formData.idLocador}
+                  onChange={handleChange}
+                  required
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                >
+                  <option value="">Selecione um proprietário...</option>
+                  {proprietarios.map((p) => (
+                    <option key={p.id} value={String(p.id)}>
+                      {p.nome} ({formatarPercentual(p.percentual)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <BuscadorPessoa
+                label="Locador (Proprietário)"
+                placeholder="Digite o nome do locador..."
+                endpoint="/locadores"
+                obterNome={nomeDoLocador}
+                onSelecionar={(id) =>
+                  setFormData((prev) => ({ ...prev, idLocador: id }))
+                }
+              />
+            )}
 
-        <BuscadorPessoa
-          label="Locatário (Inquilino)"
-          placeholder="Digite o nome do inquilino..."
-          endpoint="/locatarios"
-          onSelecionar={(id) =>
-            setFormData((prev) => ({ ...prev, idLocatario: id }))
-          }
-        />
+            {locatarioFixo ? (
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">
+                  Locatário (Inquilino)
+                </label>
+                <div className="w-full p-2 border border-gray-200 bg-gray-50 rounded-lg text-gray-500 text-sm">
+                  {locatarioFixo.nome}
+                </div>
+              </div>
+            ) : (
+              <BuscadorPessoa
+                label="Locatário (Inquilino)"
+                placeholder="Digite o nome do inquilino..."
+                endpoint="/locatarios"
+                obterNome={nomeDoLocatario}
+                onSelecionar={(id) =>
+                  setFormData((prev) => ({ ...prev, idLocatario: id }))
+                }
+              />
+            )}
+          </>
+        )}
 
         <div>
           <label className="block text-sm text-gray-700 mb-1">
@@ -263,26 +368,49 @@ export default function FormularioContrato({ imovelId, onClose, onSuccess }) {
             className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
           />
         </div>
+
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">
+            Comissão do Corretor
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              inputMode="decimal"
+              name="comissaoPercentual"
+              value={formData.comissaoPercentual}
+              onChange={handleComissaoChange}
+              placeholder="7"
+              required
+              className="w-full p-2 pr-8 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+            <span className="absolute right-3 top-2.5 text-gray-400 text-sm">
+              %
+            </span>
+          </div>
+        </div>
       </div>
 
-      <div className="pt-2 border-t border-gray-100 mt-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Anexar PDF do Contrato
-        </label>
-        <input
-          type="file"
-          accept=".pdf"
-          onChange={handleFileChange}
-          className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-        />
-      </div>
+      {!modoEdicao && (
+        <div className="pt-2 border-t border-gray-100 mt-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Anexar PDF do Contrato
+          </label>
+          <input
+            type="file"
+            accept=".pdf"
+            onChange={handleFileChange}
+            className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          />
+        </div>
+      )}
 
       <div className="pt-6 flex justify-end gap-3">
         <Button variant="secondary" onClick={onClose} type="button">
           Cancelar
         </Button>
         <Button variant="primary" type="submit">
-          Salvar e Enviar
+          {modoEdicao ? "Salvar Alterações" : "Salvar e Enviar"}
         </Button>
       </div>
     </form>

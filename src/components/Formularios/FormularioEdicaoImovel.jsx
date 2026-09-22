@@ -1,6 +1,12 @@
 import React, { useState } from "react";
 import { api } from "../../services/api";
 import Button from "../Button";
+import SeletorProprietarios, {
+  calcularTotalPercentual,
+  proprietariosSaoValidos,
+} from "./SeletorProprietarios";
+import ModalConfirmacaoPosse from "./ModalConfirmacaoPosse";
+import { mensagemDeErro } from "../../utils/posse";
 
 export default function FormularioEdicaoImovel({ imovel, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
@@ -9,33 +15,77 @@ export default function FormularioEdicaoImovel({ imovel, onClose, onSuccess }) {
     inscricaoBombeiro: imovel?.inscricaoBombeiro || ''
   });
 
+  const [proprietarios, setProprietarios] = useState(
+    Array.isArray(imovel?.propriedadeimovel)
+      ? imovel.propriedadeimovel.map((p) => ({
+          idLocador: p.idLocador,
+          nomeLocador: "",
+          percentualParticipacao: String(p.percentualParticipacao),
+        }))
+      : [],
+  );
+  const [modalPosseAberto, setModalPosseAberto] = useState(false);
+  const [loading, setLoading] = useState(false);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const salvar = async () => {
+    setLoading(true);
     try {
       const token = localStorage.getItem("@gesimo:token");
-      
+
       // O Payload exato como o Swagger exige (tudo como String)
       const payload = {
         metragem: formData.metragem ? String(formData.metragem) : null,
         inscricaoIPTU: formData.inscricaoIPTU ? String(formData.inscricaoIPTU) : null,
-        inscricaoBombeiro: formData.inscricaoBombeiro ? String(formData.inscricaoBombeiro) : null
+        inscricaoBombeiro: formData.inscricaoBombeiro ? String(formData.inscricaoBombeiro) : null,
+        proprietarios: proprietarios.map((p) => ({
+          idLocador: Number(p.idLocador),
+          percentualParticipacao: Number(String(p.percentualParticipacao).replace(",", ".")),
+        })),
       };
 
       await api.patch(`/imoveis/${imovel.id}`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
-      onSuccess(); 
+
+      onSuccess();
       onClose();
     } catch (erro) {
       console.error("Erro ao atualizar imóvel:", erro);
-      alert("Erro ao salvar as informações. Verifique o console.");
+      alert(mensagemDeErro(erro, "Erro ao salvar as informações. Verifique o console."));
+    } finally {
+      setLoading(false);
+      setModalPosseAberto(false);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!proprietariosSaoValidos(proprietarios)) {
+      alert(
+        "Cada proprietário adicionado precisa ter um locador escolhido na lista e um percentual de participação maior que zero.",
+      );
+      return;
+    }
+
+    const totalPosse = Math.round(calcularTotalPercentual(proprietarios) * 100) / 100;
+
+    if (totalPosse > 100) {
+      alert("A soma dos percentuais de participação não pode exceder 100%. Ajuste os valores para continuar.");
+      return;
+    }
+
+    if (proprietarios.length > 0 && totalPosse < 100) {
+      setModalPosseAberto(true);
+      return;
+    }
+
+    await salvar();
   };
 
   return (
@@ -76,10 +126,25 @@ export default function FormularioEdicaoImovel({ imovel, onClose, onSuccess }) {
           />
         </div>
       </div>
-      <div className="pt-6 flex justify-end gap-3">
-        <Button variant="secondary" onClick={onClose} type="button">Cancelar</Button>
-        <Button variant="primary" type="submit">Salvar Alterações</Button>
+
+      <div className="pt-2">
+        <SeletorProprietarios proprietarios={proprietarios} onChange={setProprietarios} />
       </div>
+
+      <div className="pt-6 flex justify-end gap-3 border-t">
+        <Button variant="secondary" onClick={onClose} type="button" disabled={loading}>Cancelar</Button>
+        <Button variant="primary" type="submit" disabled={loading}>
+          {loading ? "Salvando..." : "Salvar Alterações"}
+        </Button>
+      </div>
+
+      <ModalConfirmacaoPosse
+        isOpen={modalPosseAberto}
+        totalPercentual={Math.round(calcularTotalPercentual(proprietarios) * 100) / 100}
+        loading={loading}
+        onCancelar={() => setModalPosseAberto(false)}
+        onConfirmar={salvar}
+      />
     </form>
   );
 }
