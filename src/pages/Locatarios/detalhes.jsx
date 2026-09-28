@@ -9,6 +9,8 @@ import FormularioLocatario from '../../components/Formularios/FormularioLocatari
 import FormularioVincularImovel from '../../components/Formularios/FormularioVincularImovel';
 import ModalGerarMemoriaCalculo from '../../components/Formularios/ModalGerarMemoriaCalculo';
 import ModalContainer from '../../components/ModalContainer';
+import Breadcrumbs from '../../components/Breadcrumbs';
+import { ITEM_DASHBOARD } from '../../utils/breadcrumbs';
 import { api } from '../../services/api';
 import { enderecoDoImovel, nomeDoLocatario } from '../../utils/posse';
 
@@ -129,15 +131,18 @@ export default function DetalhesLocatario() {
         <Header nome={nomeUsuario} />
 
         <main className="p-8 max-w-7xl mx-auto w-full flex-1">
-          
-          <button 
+          <Breadcrumbs
+            itens={[ITEM_DASHBOARD, { label: "Locatários", path: "/locatarios" }, { label: nomeExibicao }]}
+          />
+
+          <button
             onClick={() => navigate('/locatarios')}
             className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-6 transition-colors"
           >
             <ArrowLeft size={16} />
             Voltar para lista
           </button>
-          
+
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-8">
             <div className="flex justify-between items-start mb-6">
               <div>

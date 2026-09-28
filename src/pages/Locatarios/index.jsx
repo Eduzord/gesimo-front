@@ -9,6 +9,8 @@ import DataTable from "../../components/DataTable";
 import ModalContainer from "../../components/ModalContainer";
 import FormularioLocatario from "../../components/Formularios/FormularioLocatario";
 import MenuAcoes from "../../components/MenuAcoes";
+import Breadcrumbs from "../../components/Breadcrumbs";
+import { ITEM_DASHBOARD } from "../../utils/breadcrumbs";
 
 import { api } from "../../services/api";
 
@@ -162,6 +164,7 @@ export default function Locatarios() {
         <Header nome={nomeUsuario} />
 
         <main className="p-8 max-w-7xl mx-auto w-full flex-1 flex flex-col">
+          <Breadcrumbs itens={[ITEM_DASHBOARD, { label: "Locatários" }]} />
           <div className="mb-8 flex items-center gap-3">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-1 tracking-tight">Locatários</h1>

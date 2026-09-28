@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import LayoutPagina from "../../components/LayoutPagina";
+import { ITEM_DASHBOARD } from "../../utils/breadcrumbs";
 import Badge from "../../components/Badge";
 import Button from "../../components/Button";
 import ModalContainer from "../../components/ModalContainer";
@@ -59,6 +60,7 @@ export default function GerenciarIrrf() {
     <LayoutPagina
       titulo="Gerenciar tabelas IRRF"
       descricao="Cadastre uma nova versão quando a tabela oficial mudar. Cada cálculo usa a versão vigente na data de competência."
+      trilha={[ITEM_DASHBOARD, { label: "Tabelas IRRF", path: "/irrf" }, { label: "Gerenciar" }]}
     >
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex justify-between items-center mb-6">

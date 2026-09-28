@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Settings } from "lucide-react";
 import LayoutPagina from "../../components/LayoutPagina";
+import { ITEM_DASHBOARD } from "../../utils/breadcrumbs";
 import Button from "../../components/Button";
 import TabelaIrrfCard from "../../components/Irrf/TabelaIrrfCard";
 import useTabelasIrrf from "../../hooks/useTabelasIrrf";
@@ -30,6 +31,7 @@ export default function Irrf() {
     <LayoutPagina
       titulo="Tabelas IRRF"
       descricao="Tabela progressiva do Imposto de Renda Retido na Fonte usada nos cálculos do sistema."
+      trilha={[ITEM_DASHBOARD, { label: "Tabelas IRRF" }]}
     >
       {carregando && <p className="text-gray-500">Carregando tabelas...</p>}
 

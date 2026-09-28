@@ -11,6 +11,8 @@ import ModalContainer from "../../components/ModalContainer";
 import FormularioImovel from "../../components/Formularios/FormularioImovel";
 import FormularioEdicaoImovel from "../../components/Formularios/FormularioEdicaoImovel";
 import MenuAcoes from "../../components/MenuAcoes";
+import Breadcrumbs from "../../components/Breadcrumbs";
+import { ITEM_DASHBOARD } from "../../utils/breadcrumbs";
 import { api } from "../../services/api";
 import { correspondeABusca } from "../../utils/busca";
 
@@ -190,6 +192,7 @@ export default function Imoveis() {
         <Header nome={nomeUsuario} />
 
         <main className="p-8 max-w-7xl mx-auto w-full flex-1 flex flex-col">
+          <Breadcrumbs itens={[ITEM_DASHBOARD, { label: "Imóveis" }]} />
           <h1 className="text-3xl font-bold text-gray-900 mb-1">Imóveis</h1>
           <p className="text-gray-500 text-sm mb-8">Catálogo de imóveis cadastrados</p>
 

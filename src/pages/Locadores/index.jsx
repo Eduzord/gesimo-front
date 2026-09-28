@@ -10,6 +10,8 @@ import DataTable from "../../components/DataTable";
 import ModalContainer from "../../components/ModalContainer"; // Importe o container
 import FormularioLocador from "../../components/Formularios/FormularioLocador"; // Importe o formulário
 import MenuAcoes from "../../components/MenuAcoes";
+import Breadcrumbs from "../../components/Breadcrumbs";
+import { ITEM_DASHBOARD } from "../../utils/breadcrumbs";
 import { api } from "../../services/api";
 import { correspondeABusca } from "../../utils/busca";
 
@@ -146,6 +148,7 @@ export default function Locadores() {
         <Header nome={nome} />
 
         <main className="p-8 max-w-7xl mx-auto w-full flex-1 flex flex-col">
+          <Breadcrumbs itens={[ITEM_DASHBOARD, { label: "Locadores" }]} />
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-1 tracking-tight">Locadores</h1>
             <p className="text-gray-500 text-sm">Gerencie os locadores cadastrados.</p>

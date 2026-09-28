@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Pencil, Plus, Power, Star, Trash2 } from "lucide-react";
 import LayoutPagina from "../../components/LayoutPagina";
+import { ITEM_DASHBOARD } from "../../utils/breadcrumbs";
 import Button from "../../components/Button";
 import Badge from "../../components/Badge";
 import ModalContainer from "../../components/ModalContainer";
@@ -71,6 +72,7 @@ export default function ContasBancarias() {
     <LayoutPagina
       titulo="Contas Bancárias"
       descricao="Contas de depósito que podem ser selecionadas ao gerar uma memória de cálculo. A conta marcada com estrela é a sugerida por padrão."
+      trilha={[ITEM_DASHBOARD, { label: "Contas Bancárias" }]}
     >
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex flex-wrap justify-between items-center gap-3 mb-6">

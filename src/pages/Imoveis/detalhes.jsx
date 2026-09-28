@@ -12,11 +12,14 @@ import FormularioDespesa from "../../components/Formularios/FormularioDespesas";
 import FormularioLiquidarDespesa from "../../components/Formularios/FormularioLiquidarDespesa";
 import EditorPosseImovel from "../../components/Formularios/EditorPosseImovel";
 import ModalGerarMemoriaCalculo from "../../components/Formularios/ModalGerarMemoriaCalculo";
+import Breadcrumbs from "../../components/Breadcrumbs";
+import { ITEM_DASHBOARD } from "../../utils/breadcrumbs";
 import { api } from "../../services/api";
 import { listarDespesasDoImovel } from "../../services/memoriaCalculo";
 import { formatarMoeda } from "../../utils/formatacao";
 import { TIPOS_DESPESA } from "../../utils/memoriaCalculo";
 import {
+  enderecoDoImovel,
   formatarPercentual,
   nomeDoLocador,
   nomeDoLocatario,
@@ -257,6 +260,10 @@ export default function DetalhesImovel() {
         <Header nome={nomeUsuario} />
 
         <main className="p-8 max-w-7xl mx-auto w-full flex-1">
+          <Breadcrumbs
+            itens={[ITEM_DASHBOARD, { label: "Imóveis", path: "/imoveis" }, { label: enderecoDoImovel(imovel) }]}
+          />
+
           <button
             onClick={() => navigate("/imoveis")}
             className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-6 transition-colors"

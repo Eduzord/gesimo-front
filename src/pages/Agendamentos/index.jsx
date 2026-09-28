@@ -7,6 +7,8 @@ import Calendario from "../../components/Calendario";
 import MiniCalendario from "../../components/MiniCalendario";
 import ModalContainer from "../../components/ModalContainer";
 import FormularioAgendamento from "../../components/Formularios/FormularioAgendamento";
+import Breadcrumbs from "../../components/Breadcrumbs";
+import { ITEM_DASHBOARD } from "../../utils/breadcrumbs";
 import { api } from "../../services/api";
 
 export default function Agendamentos() {
@@ -56,7 +58,8 @@ export default function Agendamentos() {
         <div className="flex flex-1 overflow-hidden">
           <main className="flex-1 flex flex-col bg-white overflow-y-auto">
             <div className="p-8 max-w-7xl mx-auto w-full flex-1 flex flex-col">
-              
+              <Breadcrumbs itens={[ITEM_DASHBOARD, { label: "Agenda" }]} />
+
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-lg">
                   <button className="p-1 hover:bg-white rounded-md transition-colors">
