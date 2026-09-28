@@ -155,7 +155,7 @@ export default function FormularioLocatario({ onClose, onSuccess, initialData })
               cpf: formData.cpf,
               rg: formData.rg,
               estadoCivil: formData.estadoCivil,
-              profissaoRamo: formData.profissaoRamo,
+              profissaoRamo: formData.profissaoRamo || undefined,
             }
           : {
               razaoSocial: formData.razaoSocial,
@@ -402,8 +402,7 @@ export default function FormularioLocatario({ onClose, onSuccess, initialData })
               name="profissaoRamo"
               value={formData.profissaoRamo}
               onChange={handleChange}
-              required
-              placeholder="Ex: Analista"
+              placeholder="Ex: Analista (opcional)"
             />
           )}
           <div className="flex flex-col">

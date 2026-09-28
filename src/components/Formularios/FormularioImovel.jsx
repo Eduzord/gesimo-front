@@ -284,6 +284,7 @@ export default function FormularioImovel({ onClose, onSuccess, initialData }) {
               { value: "TERRENO", label: "Terreno" },
               { value: "SALA_COMERCIAL", label: "Sala Comercial" },
               { value: "GALPAO", label: "Galpão" },
+              { value: "LOJA", label: "Loja" },
             ]}
           />
           <SelectGroup

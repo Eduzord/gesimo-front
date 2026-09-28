@@ -8,11 +8,36 @@ import SeletorProprietarios, {
 import ModalConfirmacaoPosse from "./ModalConfirmacaoPosse";
 import { mensagemDeErro } from "../../utils/posse";
 
+// Mesmas opções usadas no cadastro (FormularioImovel.jsx) — mantenha as duas listas em sincronia.
+const OPCOES_CLASSIFICACAO = [
+  { value: "RESIDENCIAL", label: "Residencial" },
+  { value: "COMERCIAL", label: "Comercial" },
+  { value: "RURAL", label: "Rural" },
+  { value: "INDUSTRIAL", label: "Industrial" },
+];
+const OPCOES_TIPOLOGIA = [
+  { value: "CASA", label: "Casa" },
+  { value: "APARTAMENTO", label: "Apartamento" },
+  { value: "TERRENO", label: "Terreno" },
+  { value: "SALA_COMERCIAL", label: "Sala Comercial" },
+  { value: "GALPAO", label: "Galpão" },
+  { value: "LOJA", label: "Loja" },
+];
+const OPCOES_STATUS = [
+  { value: "DISPONIVEL", label: "Disponível" },
+  { value: "ALUGADO", label: "Alugado" },
+  { value: "VENDIDO", label: "Vendido" },
+  { value: "INATIVO", label: "Inativo" },
+];
+
 export default function FormularioEdicaoImovel({ imovel, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     metragem: imovel?.metragem || '',
     inscricaoIPTU: imovel?.inscricaoIPTU || '',
-    inscricaoBombeiro: imovel?.inscricaoBombeiro || ''
+    inscricaoBombeiro: imovel?.inscricaoBombeiro || '',
+    classificacao: imovel?.classificacao || '',
+    tipologia: imovel?.tipologia || '',
+    status: imovel?.status || 'DISPONIVEL',
   });
 
   const [proprietarios, setProprietarios] = useState(
@@ -42,6 +67,9 @@ export default function FormularioEdicaoImovel({ imovel, onClose, onSuccess }) {
         metragem: formData.metragem ? String(formData.metragem) : null,
         inscricaoIPTU: formData.inscricaoIPTU ? String(formData.inscricaoIPTU) : null,
         inscricaoBombeiro: formData.inscricaoBombeiro ? String(formData.inscricaoBombeiro) : null,
+        classificacao: formData.classificacao,
+        tipologia: formData.tipologia,
+        status: formData.status,
         proprietarios: proprietarios.map((p) => ({
           idLocador: Number(p.idLocador),
           percentualParticipacao: Number(String(p.percentualParticipacao).replace(",", ".")),
@@ -90,6 +118,53 @@ export default function FormularioEdicaoImovel({ imovel, onClose, onSuccess }) {
 
   return (
     <form onSubmit={handleSubmit} className="p-6 space-y-4">
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Classificação</label>
+          <select
+            name="classificacao"
+            value={formData.classificacao}
+            onChange={handleChange}
+            required
+            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+          >
+            <option value="" disabled>Selecione...</option>
+            {OPCOES_CLASSIFICACAO.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Tipologia</label>
+          <select
+            name="tipologia"
+            value={formData.tipologia}
+            onChange={handleChange}
+            required
+            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+          >
+            <option value="" disabled>Selecione...</option>
+            {OPCOES_TIPOLOGIA.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700 mb-1">Status</label>
+          <select
+            name="status"
+            value={formData.status}
+            onChange={handleChange}
+            required
+            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+          >
+            {OPCOES_STATUS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-4">
         <div>
           {/* Note que mudei o type para "text" pois o Swagger aceita coisas como "150m2" */}

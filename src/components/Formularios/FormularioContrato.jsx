@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../../services/api";
 import Button from "../Button";
+import CampoDecimal from "../CampoDecimal";
 import { Search } from "lucide-react";
 import { mensagemDeErro, nomeDoLocador, nomeDoLocatario, formatarPercentual } from "../../utils/posse";
 
@@ -137,9 +138,13 @@ export default function FormularioContrato({ imovelId, contrato, proprietarios =
   const handleComissaoChange = (e) => {
     const { value } = e.target;
     // Aceita apenas dígitos e um único separador decimal (. ou ,)
-    if (/^[0-9]*[.,]?[0-9]*$/.test(value)) {
-      setFormData((prev) => ({ ...prev, comissaoPercentual: value }));
-    }
+    if (!/^[0-9]*[.,]?[0-9]*$/.test(value)) return;
+
+    // Bloqueia já na digitação qualquer valor que resultaria em comissão acima de 100%
+    const numero = Number(value.replace(",", "."));
+    if (value !== "" && !Number.isNaN(numero) && numero > 100) return;
+
+    setFormData((prev) => ({ ...prev, comissaoPercentual: value }));
   };
 
   const handleFileChange = (e) => {
@@ -159,8 +164,12 @@ export default function FormularioContrato({ imovelId, contrato, proprietarios =
     const comissao =
       Number(String(formData.comissaoPercentual).replace(",", ".")) / 100;
 
-    if (!formData.comissaoPercentual || Number.isNaN(comissao)) {
+    if (!formData.comissaoPercentual || Number.isNaN(comissao) || comissao < 0) {
       alert("Por favor, informe um valor de comissão válido.");
+      return;
+    }
+    if (comissao > 1) {
+      alert("A comissão não pode ser maior que 100%.");
       return;
     }
 
@@ -373,21 +382,14 @@ export default function FormularioContrato({ imovelId, contrato, proprietarios =
           <label className="block text-sm text-gray-700 mb-1">
             Comissão do Corretor
           </label>
-          <div className="relative">
-            <input
-              type="text"
-              inputMode="decimal"
-              name="comissaoPercentual"
-              value={formData.comissaoPercentual}
-              onChange={handleComissaoChange}
-              placeholder="7"
-              required
-              className="w-full p-2 pr-8 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            />
-            <span className="absolute right-3 top-2.5 text-gray-400 text-sm">
-              %
-            </span>
-          </div>
+          <CampoDecimal
+            name="comissaoPercentual"
+            value={formData.comissaoPercentual}
+            onChange={(valor) => handleComissaoChange({ target: { value: valor } })}
+            sufixo="%"
+            placeholder="7"
+            required
+          />
         </div>
       </div>
 
