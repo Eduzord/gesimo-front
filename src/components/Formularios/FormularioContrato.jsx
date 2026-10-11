@@ -3,7 +3,7 @@ import { api } from "../../services/api";
 import Button from "../Button";
 import CampoDecimal from "../CampoDecimal";
 import { Search } from "lucide-react";
-import { mensagemDeErro, nomeDoLocador, nomeDoLocatario, formatarPercentual } from "../../utils/posse";
+import { enderecoDoImovel, mensagemDeErro, nomeDoLocador, nomeDoLocatario, formatarPercentual } from "../../utils/posse";
 
 // ==========================================
 // SUBCOMPONENTE: BUSCADOR COM FILTRO LOCAL
@@ -107,14 +107,17 @@ const BuscadorPessoa = ({ label, placeholder, endpoint, obterNome, onSelecionar 
 // ==========================================
 // FORMULÁRIO PRINCIPAL
 // ==========================================
+// "imovel": objeto do imóvel (endereço etc.), usado só para sugerir o nome do contrato na criação
+// ("Contrato <endereço do imóvel>") — o usuário pode trocar livremente antes de salvar.
 // "proprietarios": [{ id, nome, percentual }] do imóvel. Quando informado, o locador do contrato
 // só pode ser um deles (regra validada também no backend).
 // "locatarioFixo": { id, nome } quando o contrato é aberto a partir da tela de um locatário.
-export default function FormularioContrato({ imovelId, contrato, proprietarios = [], locatarioFixo, onClose, onSuccess }) {
+export default function FormularioContrato({ imovelId, imovel, contrato, proprietarios = [], locatarioFixo, onClose, onSuccess }) {
   const modoEdicao = Boolean(contrato);
   const restringirLocador = !modoEdicao && proprietarios.length > 0;
 
   const [formData, setFormData] = useState({
+    nome: contrato?.nome || (imovel ? `Contrato ${enderecoDoImovel(imovel)}` : ""),
     idLocador:
       contrato?.idLocador?.toString() ||
       (proprietarios.length === 1 ? String(proprietarios[0].id) : ""),
@@ -156,6 +159,11 @@ export default function FormularioContrato({ imovelId, contrato, proprietarios =
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (!formData.nome.trim()) {
+      alert("Por favor, informe um nome para o contrato.");
+      return;
+    }
+
     if (!modoEdicao && (!formData.idLocador || !formData.idLocatario)) {
       alert("Por favor, busque e selecione o Locador e o Locatário na lista.");
       return;
@@ -177,18 +185,37 @@ export default function FormularioContrato({ imovelId, contrato, proprietarios =
       const token = localStorage.getItem("@gesimo:token");
 
       if (modoEdicao) {
-        // Atualiza os dados de um contrato existente
+        // Renomear é independente do status do contrato (ver ModalContainer "Editar Contrato" e o
+        // backend: PATCH .../nome nunca bloqueia por status, diferente de PATCH .../dados abaixo).
+        // Por isso é uma chamada própria, sempre tentada primeiro.
         await api.patch(
-          `/imoveis/contratos/${contrato.id}/dados`,
-          {
-            dataInicio: formData.dataInicio,
-            dataFim: formData.dataFim || undefined,
-            dataReajuste: formData.dataReajuste || undefined,
-            valorAluguel: Number(formData.valorAluguel),
-            comissao,
-          },
+          `/imoveis/contratos/${contrato.id}/nome`,
+          { nome: formData.nome.trim() },
           { headers: { Authorization: `Bearer ${token}` } },
         );
+
+        try {
+          await api.patch(
+            `/imoveis/contratos/${contrato.id}/dados`,
+            {
+              dataInicio: formData.dataInicio,
+              dataFim: formData.dataFim || undefined,
+              dataReajuste: formData.dataReajuste || undefined,
+              valorAluguel: Number(formData.valorAluguel),
+              comissao,
+            },
+            { headers: { Authorization: `Bearer ${token}` } },
+          );
+        } catch (erroDados) {
+          // O nome já foi salvo; só os demais campos (financeiros/datas) não puderam ser alterados
+          // — normalmente porque o contrato não está mais ATIVO.
+          console.error("Erro ao atualizar os demais dados do contrato:", erroDados);
+          alert(
+            `O nome do contrato foi salvo, mas os demais dados não puderam ser atualizados: ${mensagemDeErro(erroDados, "verifique o status do contrato.")}`,
+          );
+          onSuccess();
+          return;
+        }
 
         onSuccess();
         return;
@@ -197,6 +224,7 @@ export default function FormularioContrato({ imovelId, contrato, proprietarios =
       // 1. Cria o contrato no banco
       const payloadContrato = {
         idImovel: Number(imovelId),
+        nome: formData.nome.trim(),
         idLocador: Number(formData.idLocador),
         idLocatario: Number(formData.idLocatario),
         dataInicio: formData.dataInicio,
@@ -246,6 +274,19 @@ export default function FormularioContrato({ imovelId, contrato, proprietarios =
   };
   return (
     <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-visible">
+      <div>
+        <label className="block text-sm text-gray-700 mb-1">Nome do Contrato</label>
+        <input
+          type="text"
+          name="nome"
+          value={formData.nome}
+          onChange={handleChange}
+          required
+          placeholder="Ex: Contrato Rua Buenos Aires, 113"
+          className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+        />
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         {modoEdicao ? (
           <>

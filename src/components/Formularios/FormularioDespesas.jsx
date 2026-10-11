@@ -23,7 +23,9 @@ function rotuloContrato(contrato) {
   const periodo = contrato.dataInicio
     ? ` (${formatarData(contrato.dataInicio)}${contrato.dataFim ? ` a ${formatarData(contrato.dataFim)}` : ""})`
     : "";
-  return `Contrato #${contrato.id} — ${contrato.status}${periodo}`;
+  // Contratos criados antes do campo "nome" existir não têm esse valor — caem de volta no antigo "#id".
+  const nome = contrato.nome || `Contrato #${contrato.id}`;
+  return `${nome} — ${contrato.status}${periodo}`;
 }
 
 export default function FormularioDespesa({ imovelId, contratos = [], onClose, onSuccess }) {

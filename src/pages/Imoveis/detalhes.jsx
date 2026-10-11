@@ -30,6 +30,11 @@ import {
   somaPosse,
 } from "../../utils/posse";
 
+// Filtros da aba "Despesas": "situacao" distingue as três categorias contábeis de uma despesa —
+// ainda em aberto, paga (quitada) ou paga mas sem comprovante anexado (a mesma noção de "quitada"
+// usada no resto da tela). O período filtra pela data de VENCIMENTO, não pela data de pagamento.
+const FILTRO_DESPESAS_VAZIO = { dataDe: "", dataAte: "", tipo: "", situacao: "" };
+
 export default function DetalhesImovel() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -48,6 +53,7 @@ export default function DetalhesImovel() {
   const [contratoEmEdicao, setContratoEmEdicao] = useState(null);
   const [despesasImovel, setDespesasImovel] = useState([]);
   const [carregandoDespesas, setCarregandoDespesas] = useState(true);
+  const [filtroDespesas, setFiltroDespesas] = useState(FILTRO_DESPESAS_VAZIO);
   const [despesaEmLiquidacao, setDespesaEmLiquidacao] = useState(null);
   const [despesaParaExcluir, setDespesaParaExcluir] = useState(null);
   const [excluindoDespesa, setExcluindoDespesa] = useState(false);
@@ -235,6 +241,19 @@ export default function DetalhesImovel() {
   const proprietarios = imovel.propriedadeimovel || [];
   const totalPosse = somaPosse(proprietarios);
   const contratoAtivo = contratos.find((c) => c.status === "ATIVO");
+
+  const filtrosDespesasAtivos = Object.values(filtroDespesas).some((valor) => valor !== "");
+  const despesasFiltradas = despesasImovel.filter((despesa) => {
+    if (filtroDespesas.dataDe && despesa.dataVencimento.slice(0, 10) < filtroDespesas.dataDe) return false;
+    if (filtroDespesas.dataAte && despesa.dataVencimento.slice(0, 10) > filtroDespesas.dataAte) return false;
+    if (filtroDespesas.tipo && despesa.tipo !== filtroDespesas.tipo) return false;
+
+    if (filtroDespesas.situacao === "EM_ABERTO" && despesa.status !== "EM_ABERTO") return false;
+    if (filtroDespesas.situacao === "PAGA" && !(despesa.status === "PAGA" && despesa.comprovantePagamento)) return false;
+    if (filtroDespesas.situacao === "SEM_COMPROVANTE" && !(despesa.status === "PAGA" && !despesa.comprovantePagamento)) return false;
+
+    return true;
+  });
 
   // Locatário só entra por contrato: o imóvel precisa estar livre e ter proprietários para o contrato apontar um deles
   let motivoSemLocatario = "";
@@ -539,6 +558,7 @@ export default function DetalhesImovel() {
                     <table className="w-full text-sm text-left">
                       <thead className="text-xs text-gray-500 uppercase bg-gray-50/50 border-b border-gray-100">
                         <tr>
+                          <th className="px-4 py-3 font-medium">Nome</th>
                           <th className="px-4 py-3 font-medium">Locador</th>
                           <th className="px-4 py-3 font-medium">Locatário</th>
                           <th className="px-4 py-3 font-medium">Valor Aluguel</th>
@@ -552,7 +572,7 @@ export default function DetalhesImovel() {
                       <tbody className="divide-y divide-gray-100">
                         {contratos.length === 0 ? (
                           <tr className="hover:bg-gray-50/50 transition-colors group">
-                            <td className="px-4 py-4 flex items-center gap-3" colSpan={8}>
+                            <td className="px-4 py-4 flex items-center gap-3" colSpan={9}>
                               <FileText size={18} className="text-gray-400" />
                               <span className="font-medium text-gray-500">
                                 Nenhum contrato encontrado...
@@ -565,6 +585,9 @@ export default function DetalhesImovel() {
                               key={contrato.id}
                               className="hover:bg-gray-50/50 transition-colors group"
                             >
+                              <td className="px-4 py-4 text-gray-900 font-medium">
+                                {contrato.nome || `Contrato #${contrato.id}`}
+                              </td>
                               <td className="px-4 py-4 text-gray-900">
                                 {nomeLocador(contrato.idLocador)}
                               </td>
@@ -623,6 +646,62 @@ export default function DetalhesImovel() {
                     </Button>
                   </div>
 
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Vencimento de</label>
+                      <input
+                        type="date"
+                        value={filtroDespesas.dataDe}
+                        onChange={(e) => setFiltroDespesas((prev) => ({ ...prev, dataDe: e.target.value }))}
+                        className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Vencimento até</label>
+                      <input
+                        type="date"
+                        value={filtroDespesas.dataAte}
+                        onChange={(e) => setFiltroDespesas((prev) => ({ ...prev, dataAte: e.target.value }))}
+                        className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Tipo de despesa</label>
+                      <select
+                        value={filtroDespesas.tipo}
+                        onChange={(e) => setFiltroDespesas((prev) => ({ ...prev, tipo: e.target.value }))}
+                        className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                      >
+                        <option value="">Todos os tipos</option>
+                        {TIPOS_DESPESA.map((t) => (
+                          <option key={t.value} value={t.value}>{t.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Situação</label>
+                      <select
+                        value={filtroDespesas.situacao}
+                        onChange={(e) => setFiltroDespesas((prev) => ({ ...prev, situacao: e.target.value }))}
+                        className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                      >
+                        <option value="">Todas</option>
+                        <option value="EM_ABERTO">Em aberto</option>
+                        <option value="PAGA">Pagas</option>
+                        <option value="SEM_COMPROVANTE">Pagas sem comprovante</option>
+                      </select>
+                    </div>
+                    {filtrosDespesasAtivos && (
+                      <button
+                        type="button"
+                        onClick={() => setFiltroDespesas(FILTRO_DESPESAS_VAZIO)}
+                        className="col-span-2 md:col-span-4 text-left text-xs text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        Limpar filtros
+                      </button>
+                    )}
+                  </div>
+
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
                       <thead className="text-xs text-gray-500 uppercase bg-gray-50/50 border-b border-gray-100">
@@ -642,17 +721,19 @@ export default function DetalhesImovel() {
                               Carregando despesas...
                             </td>
                           </tr>
-                        ) : despesasImovel.length === 0 ? (
+                        ) : despesasFiltradas.length === 0 ? (
                           <tr className="hover:bg-gray-50/50 transition-colors group">
                             <td className="px-4 py-4 flex items-center gap-3" colSpan={6}>
                               <FileText size={18} className="text-gray-400" />
                               <span className="font-medium text-gray-500">
-                                Nenhuma despesa lançada para este imóvel ainda.
+                                {filtrosDespesasAtivos
+                                  ? "Nenhuma despesa encontrada com esses filtros."
+                                  : "Nenhuma despesa lançada para este imóvel ainda."}
                               </span>
                             </td>
                           </tr>
                         ) : (
-                          despesasImovel.map((despesa) => {
+                          despesasFiltradas.map((despesa) => {
                             const quitada = despesa.status === "PAGA" && despesa.comprovantePagamento;
                             return (
                               <tr key={despesa.id} className="hover:bg-gray-50/50 transition-colors group">
@@ -759,6 +840,7 @@ export default function DetalhesImovel() {
         >
           <FormularioContrato
             imovelId={imovel.id}
+            imovel={imovel}
             contrato={contratoEmEdicao}
             proprietarios={proprietariosParaContrato}
             onClose={() => {

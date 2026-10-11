@@ -83,6 +83,7 @@ export default function FormularioVincularImovel({ locatario, onClose, onSuccess
         <FormularioContrato
           key={imovelSelecionado.id}
           imovelId={imovelSelecionado.id}
+          imovel={imovelSelecionado}
           proprietarios={proprietarios}
           locatarioFixo={locatario}
           onClose={onClose}
