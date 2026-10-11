@@ -7,7 +7,11 @@ import { formatarMoeda } from "../../utils/formatacao";
 // Separado de FormularioDespesas porque aqui a despesa já existe: só fechamos o ciclo dela.
 export default function FormularioLiquidarDespesa({ despesa, onClose, onSuccess }) {
   const [arquivo, setArquivo] = useState(null);
-  const [dataPagamento, setDataPagamento] = useState(new Date().toISOString().slice(0, 10));
+  // Se a despesa já estava marcada como PAGA (só faltando o comprovante), reaproveita a data de
+  // pagamento já registrada em vez de sugerir hoje — evita sobrescrever a data real por engano.
+  const [dataPagamento, setDataPagamento] = useState(
+    despesa.dataPagamento ? despesa.dataPagamento.slice(0, 10) : new Date().toISOString().slice(0, 10),
+  );
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState(null);
 

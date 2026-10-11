@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { UploadCloud, FileText, Edit, MapPin, ArrowLeft, Trash2, AlertCircle, CheckCircle2, UserPlus, Calculator } from "lucide-react";
+import { UploadCloud, FileText, FileWarning, Edit, MapPin, ArrowLeft, Trash2, AlertCircle, CheckCircle2, UserPlus, Calculator } from "lucide-react";
 import Sidebar from "../../components/Sidebar";
 import Header from "../../components/Header";
 import Badge from "../../components/Badge";
@@ -740,6 +740,7 @@ export default function DetalhesImovel() {
                         ) : (
                           despesasFiltradas.map((despesa) => {
                             const quitada = despesa.status === "PAGA" && despesa.comprovantePagamento;
+                            const pagaSemComprovante = despesa.status === "PAGA" && !despesa.comprovantePagamento;
                             return (
                               <tr key={despesa.id} className="hover:bg-gray-50/50 transition-colors group">
                                 <td className="px-4 py-4 text-gray-900 font-medium">{despesa.descricao}</td>
@@ -749,11 +750,17 @@ export default function DetalhesImovel() {
                                 <td className="px-4 py-4 text-gray-500">{formatarData(despesa.dataVencimento)}</td>
                                 <td className="px-4 py-4 text-gray-900 font-bold">{formatarMoeda(despesa.valor)}</td>
                                 <td className="px-4 py-4">
-                                  {quitada ? (
+                                  {quitada && (
                                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
                                       <CheckCircle2 size={12} /> Quitada
                                     </span>
-                                  ) : (
+                                  )}
+                                  {pagaSemComprovante && (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-orange-50 text-orange-700 border border-orange-200">
+                                      <FileWarning size={12} /> Paga, falta comprovante
+                                    </span>
+                                  )}
+                                  {!quitada && !pagaSemComprovante && (
                                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
                                       <AlertCircle size={12} /> Em Aberto
                                     </span>
