@@ -13,6 +13,7 @@ import Agendamentos from './pages/Agendamentos';
 import Irrf from './pages/Irrf';
 import GerenciarIrrf from './pages/Irrf/gerenciar';
 import ContasBancarias from './pages/ContasBancarias';
+import MemoriasCalculo from './pages/MemoriasCalculo';
 import ProtectedRoute from './components/ProtectedRoute';
 
 export default function App() {
@@ -50,6 +51,9 @@ export default function App() {
 
         {/* <!-- Contas bancárias: CRUD aberto a qualquer usuário autenticado --> */}
         <Route path="/contas-bancarias" element={<ProtectedRoute><ContasBancarias /></ProtectedRoute>} />
+
+        {/* <!-- Consulta geral das memórias de cálculo já geradas --> */}
+        <Route path="/memorias-calculo" element={<ProtectedRoute><MemoriasCalculo /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   );

@@ -9,6 +9,11 @@ export const prepararMemoriaCalculo = async (idImovel, competencia) =>
 export const listarMemoriasCalculo = async (idImovel) =>
   corpo(await api.get(`/imoveis/memoria-calculo/imovel/${idImovel}/historico`));
 
+// Consulta geral (todos os imóveis), para a tela "Memórias de Cálculo". "filtros.competencia"
+// ("AAAA-MM-01") filtra pelo mês; "filtros.idImovel" filtra por imóvel. Sem filtros, traz tudo.
+export const listarTodasMemoriasCalculo = async (filtros = {}) =>
+  corpo(await api.get("/imoveis/memoria-calculo", { params: filtros }));
+
 export const gerarMemoriaCalculo = async (payload) => corpo(await api.post("/imoveis/memoria-calculo", payload));
 
 export const buscarMemoriaCalculo = async (id) => corpo(await api.get(`/imoveis/memoria-calculo/${id}`));
