@@ -13,6 +13,7 @@ import FormularioLiquidarDespesa from "../../components/Formularios/FormularioLi
 import ModalExcluirDespesa from "../../components/Formularios/ModalExcluirDespesa";
 import EditorPosseImovel from "../../components/Formularios/EditorPosseImovel";
 import ModalGerarMemoriaCalculo from "../../components/Formularios/ModalGerarMemoriaCalculo";
+import ModalGerarInformeRendimentos from "../../components/Formularios/ModalGerarInformeRendimentos";
 import Breadcrumbs from "../../components/Breadcrumbs";
 import { ITEM_DASHBOARD } from "../../utils/breadcrumbs";
 import { api } from "../../services/api";
@@ -49,6 +50,7 @@ export default function DetalhesImovel() {
   const [modalDespesaAberto, setModalDespesaAberto] = useState(false);
   const [modalPosseAberto, setModalPosseAberto] = useState(false);
   const [modalMemoriaAberto, setModalMemoriaAberto] = useState(false);
+  const [modalInformeAberto, setModalInformeAberto] = useState(false);
   const [contratos, setContratos] = useState([]);
   const [contratoEmEdicao, setContratoEmEdicao] = useState(null);
   const [despesasImovel, setDespesasImovel] = useState([]);
@@ -332,6 +334,9 @@ export default function DetalhesImovel() {
               <div className="flex flex-wrap justify-end gap-3">
                 <Button variant="outline" icon={Calculator} onClick={() => setModalMemoriaAberto(true)}>
                   Gerar Memória de Cálculo
+                </Button>
+                <Button variant="outline" icon={FileText} onClick={() => setModalInformeAberto(true)}>
+                  Gerar Informe de Rendimentos
                 </Button>
                 <Button
                   variant="secondary"
@@ -930,6 +935,20 @@ export default function DetalhesImovel() {
             imovelId={imovel.id}
             onClose={() => setModalMemoriaAberto(false)}
             onGerado={recarregarDespesas}
+          />
+        </ModalContainer>
+      )}
+
+      {modalInformeAberto && (
+        <ModalContainer
+          isOpen
+          onClose={() => setModalInformeAberto(false)}
+          title="Gerar Informe de Rendimentos"
+        >
+          <ModalGerarInformeRendimentos
+            imovelId={imovel.id}
+            proprietarios={proprietariosParaContrato}
+            onClose={() => setModalInformeAberto(false)}
           />
         </ModalContainer>
       )}

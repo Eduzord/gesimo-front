@@ -5,6 +5,14 @@ export function nomeDoLocador(locador) {
   return locador?.nome || locador?.razaoSocial || "";
 }
 
+export function documentoDoLocador(locador) {
+  return locador?.cpf || locador?.cnpj || "";
+}
+
+export function documentoDoLocatario(locatario) {
+  return locatario?.pessoaFisica?.cpf || locatario?.pessoaJuridica?.cnpj || locatario?.cpf || locatario?.cnpj || "";
+}
+
 // No locatário o nome fica aninhado em pessoaFisica / pessoaJuridica
 export function nomeDoLocatario(locatario) {
   return (

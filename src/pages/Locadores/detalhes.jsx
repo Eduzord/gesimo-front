@@ -7,6 +7,7 @@ import Button from '../../components/Button';
 import Badge from '../../components/Badge';
 import FormularioLocador from '../../components/Formularios/FormularioLocador';
 import FormularioAtribuirImovel from '../../components/Formularios/FormularioAtribuirImovel';
+import ModalGerarInformeRendimentos from '../../components/Formularios/ModalGerarInformeRendimentos';
 import ModalContainer from '../../components/ModalContainer';
 import Breadcrumbs from '../../components/Breadcrumbs';
 import { ITEM_DASHBOARD } from '../../utils/breadcrumbs';
@@ -31,6 +32,7 @@ export default function DetalhesLocador() {
   const [carregando, setCarregando] = useState(true);
   const [modalEdicaoAberto, setModalEdicaoAberto] = useState(isEditInit);
   const [modalAtribuirAberto, setModalAtribuirAberto] = useState(false);
+  const [modalInformeAberto, setModalInformeAberto] = useState(false);
   const [imoveis, setImoveis] = useState([]);
 
   const [nomeUsuario, setNomeUsuario] = useState("");
@@ -196,7 +198,9 @@ export default function DetalhesLocador() {
               <div className="flex flex-wrap justify-end gap-3">
                 {/* Ações ainda não implementadas */}
                 <Button variant="outline" icon={Receipt}>Gerar Recibo de Aluguel</Button>
-                <Button variant="outline" icon={FileText}>Gerar Informe de Rendimentos</Button>
+                <Button variant="outline" icon={FileText} onClick={() => setModalInformeAberto(true)}>
+                  Gerar Informe de Rendimentos
+                </Button>
                 <Button variant="secondary" icon={Edit} onClick={() => setModalEdicaoAberto(true)}>Editar</Button>
                 <Button variant="primary" icon={Trash2} onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white border-none">Apagar</Button>
                 {localStorage.getItem("@gesimo:role") === "ADMIN" && (
@@ -303,6 +307,18 @@ export default function DetalhesLocador() {
               setModalAtribuirAberto(false);
               carregarImoveis();
             }}
+          />
+        </ModalContainer>
+      )}
+
+      {modalInformeAberto && (
+        <ModalContainer isOpen onClose={() => setModalInformeAberto(false)} title="Gerar Informe de Rendimentos">
+          <ModalGerarInformeRendimentos
+            locadorId={locador.id}
+            locadorNome={nomeExibicao}
+            locadorDocumento={documentoExibicao}
+            imoveis={imoveis}
+            onClose={() => setModalInformeAberto(false)}
           />
         </ModalContainer>
       )}
