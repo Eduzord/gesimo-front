@@ -10,17 +10,20 @@ import FormularioEdicaoImovel from "../../components/Formularios/FormularioEdica
 import FormularioContrato from "../../components/Formularios/FormularioContrato";
 import FormularioDespesa from "../../components/Formularios/FormularioDespesas";
 import FormularioLiquidarDespesa from "../../components/Formularios/FormularioLiquidarDespesa";
+import ModalExcluirDespesa from "../../components/Formularios/ModalExcluirDespesa";
 import EditorPosseImovel from "../../components/Formularios/EditorPosseImovel";
 import ModalGerarMemoriaCalculo from "../../components/Formularios/ModalGerarMemoriaCalculo";
 import Breadcrumbs from "../../components/Breadcrumbs";
 import { ITEM_DASHBOARD } from "../../utils/breadcrumbs";
 import { api } from "../../services/api";
 import { listarDespesasDoImovel } from "../../services/memoriaCalculo";
+import { excluirDespesa } from "../../services/despesas";
 import { formatarMoeda } from "../../utils/formatacao";
 import { TIPOS_DESPESA } from "../../utils/memoriaCalculo";
 import {
   enderecoDoImovel,
   formatarPercentual,
+  mensagemDeErro,
   nomeDoLocador,
   nomeDoLocatario,
   proprietariosParaEstado,
@@ -46,6 +49,8 @@ export default function DetalhesImovel() {
   const [despesasImovel, setDespesasImovel] = useState([]);
   const [carregandoDespesas, setCarregandoDespesas] = useState(true);
   const [despesaEmLiquidacao, setDespesaEmLiquidacao] = useState(null);
+  const [despesaParaExcluir, setDespesaParaExcluir] = useState(null);
+  const [excluindoDespesa, setExcluindoDespesa] = useState(false);
   // Nomes resolvidos por ID (o imóvel e o contrato só guardam idLocador/idLocatario)
   const [nomesLocadores, setNomesLocadores] = useState({});
   const [nomesLocatarios, setNomesLocatarios] = useState({});
@@ -116,6 +121,20 @@ export default function DetalhesImovel() {
   };
 
   useEffect(recarregarDespesas, [id]);
+
+  const confirmarExclusaoDespesa = async () => {
+    setExcluindoDespesa(true);
+    try {
+      await excluirDespesa(despesaParaExcluir.id);
+      setDespesaParaExcluir(null);
+      recarregarDespesas();
+    } catch (erro) {
+      console.error("Erro ao excluir despesa:", erro);
+      alert(mensagemDeErro(erro, "Erro ao excluir a despesa."));
+    } finally {
+      setExcluindoDespesa(false);
+    }
+  };
 
   // Resolve os nomes de locadores (proprietários + locadores dos contratos) e locatários dos contratos
   useEffect(() => {
@@ -655,14 +674,24 @@ export default function DetalhesImovel() {
                                   )}
                                 </td>
                                 <td className="px-4 py-4 text-right">
-                                  {!quitada && (
-                                    <button
-                                      onClick={() => setDespesaEmLiquidacao(despesa)}
-                                      className="text-blue-600 hover:text-blue-800 font-medium text-xs"
-                                    >
-                                      Anexar comprovante
-                                    </button>
-                                  )}
+                                  <div className="flex items-center justify-end gap-3">
+                                    {!quitada && (
+                                      <button
+                                        onClick={() => setDespesaEmLiquidacao(despesa)}
+                                        className="text-blue-600 hover:text-blue-800 font-medium text-xs"
+                                      >
+                                        Anexar comprovante
+                                      </button>
+                                    )}
+                                    {despesa.status === "EM_ABERTO" && (
+                                      <button
+                                        onClick={() => setDespesaParaExcluir(despesa)}
+                                        className="text-red-600 hover:text-red-800 font-medium text-xs"
+                                      >
+                                        Excluir
+                                      </button>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -772,6 +801,7 @@ export default function DetalhesImovel() {
         >
           <FormularioDespesa
             imovelId={imovel.id}
+            contratos={contratos}
             onClose={() => setModalDespesaAberto(false)}
             onSuccess={() => {
               setModalDespesaAberto(false);
@@ -796,6 +826,15 @@ export default function DetalhesImovel() {
             }}
           />
         </ModalContainer>
+      )}
+
+      {despesaParaExcluir && (
+        <ModalExcluirDespesa
+          despesa={despesaParaExcluir}
+          excluindo={excluindoDespesa}
+          onCancelar={() => setDespesaParaExcluir(null)}
+          onConfirmar={confirmarExclusaoDespesa}
+        />
       )}
 
       {modalMemoriaAberto && (

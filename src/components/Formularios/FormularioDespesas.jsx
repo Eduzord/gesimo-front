@@ -1,38 +1,38 @@
-import React, { useMemo, useState } from "react";
+import { useState } from "react";
 import { Layers } from "lucide-react";
 import { api } from "../../services/api";
 import { criarDespesaParcelada } from "../../services/despesas";
 import { dividirEmParcelas, formatarDataISO, NUMERO_MINIMO_PARCELAS, NUMERO_MAXIMO_PARCELAS } from "../../utils/parcelamento";
-import { formatarMoeda } from "../../utils/formatacao";
+import { formatarData, formatarMoeda, numeroParaCampo, paraNumero } from "../../utils/formatacao";
+import CampoDecimal from "../CampoDecimal";
 import Button from "../Button";
 
 const classeCampo = "w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none";
 
-// Mostra como o valor total ficaria dividido antes de o usuário confirmar o lançamento — nenhum
-// cálculo feito aqui é enviado à API; é só a prévia (quem grava de fato é o backend).
-function PrevisaoParcelas({ parcelas, numeroParcelas }) {
-  return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-      <p className="text-xs font-medium text-gray-600 mb-2">
-        Prévia — {numeroParcelas} parcelas:
-      </p>
-      <ul className="max-h-36 overflow-y-auto divide-y divide-gray-200 text-sm">
-        {parcelas.map((parcela) => (
-          <li key={parcela.numero} className="flex justify-between py-1.5">
-            <span className="text-gray-600">
-              Parcela {parcela.numero}/{numeroParcelas} — venc. {formatarDataISO(parcela.dataVencimento).split("-").reverse().join("/")}
-            </span>
-            <span className="font-medium text-gray-900">{formatarMoeda(parcela.valor)}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
+// Converte o resultado de dividirEmParcelas (números/Date, só uma sugestão) no formato que os campos
+// editáveis do formulário usam (texto em pt-BR, data em "AAAA-MM-DD") — o usuário ajusta a partir daqui.
+function paraParcelasEditaveis(parcelasSugeridas) {
+  return parcelasSugeridas.map((parcela) => ({
+    numero: parcela.numero,
+    valor: numeroParaCampo(parcela.valor),
+    dataVencimento: formatarDataISO(parcela.dataVencimento),
+  }));
 }
 
-export default function FormularioDespesa({ imovelId, onClose, onSuccess }) {
+function rotuloContrato(contrato) {
+  const periodo = contrato.dataInicio
+    ? ` (${formatarData(contrato.dataInicio)}${contrato.dataFim ? ` a ${formatarData(contrato.dataFim)}` : ""})`
+    : "";
+  return `Contrato #${contrato.id} — ${contrato.status}${periodo}`;
+}
+
+export default function FormularioDespesa({ imovelId, contratos = [], onClose, onSuccess }) {
+  // Mais recente primeiro: é o que normalmente se quer lançar uma despesa nova, por isso também é o
+  // pré-selecionado por padrão (ver estado inicial de idContratoLocacao, abaixo).
+  const contratosOrdenados = [...contratos].sort((a, b) => Number(b.id) - Number(a.id));
+
   const [formData, setFormData] = useState({
-    idContratoLocacao: "", // A despesa é atrelada a um contrato no seu banco
+    idContratoLocacao: contratosOrdenados[0] ? String(contratosOrdenados[0].id) : "",
     descricao: "",
     valor: "",
     tipo: "MANUTENCAO",
@@ -40,10 +40,17 @@ export default function FormularioDespesa({ imovelId, onClose, onSuccess }) {
   });
 
   // Lançamento parcelado (ex.: IPTU em 10x): quando ativo, "valor" passa a ser o TOTAL a dividir e
-  // "dataVencimento" o vencimento da 1ª parcela — por isso reaproveitam os mesmos campos acima, em vez
-  // de duplicar inputs, mantendo a tela simples mesmo com a opção nova.
+  // "dataVencimento" o vencimento sugerido da 1ª parcela — por isso reaproveitam os mesmos campos
+  // acima, em vez de duplicar inputs, mantendo a tela simples mesmo com a opção nova.
   const [parcelado, setParcelado] = useState(false);
   const [numeroParcelas, setNumeroParcelas] = useState("");
+  // As parcelas abaixo nascem da sugestão automática (valor total ÷ quantidade), mas o usuário pode
+  // editar o valor e o vencimento de qualquer uma antes de confirmar — por isso vivem num estado
+  // próprio, e não são recalculadas o tempo todo a partir dos campos acima (isso apagaria as edições).
+  const [parcelas, setParcelas] = useState([]);
+  // Guarda de quais dados (valor total + quantidade + 1º vencimento) a lista acima foi gerada, para
+  // só regenerar quando algum desses três realmente mudar — nunca a cada edição de uma parcela.
+  const [origemDasParcelas, setOrigemDasParcelas] = useState(null);
 
   const [arquivoSelecionado, setArquivoSelecionado] = useState(null);
   const [dataPagamento, setDataPagamento] = useState("");
@@ -57,7 +64,11 @@ export default function FormularioDespesa({ imovelId, onClose, onSuccess }) {
 
   const alternarParcelado = (ativo) => {
     setParcelado(ativo);
-    if (!ativo) setNumeroParcelas("");
+    if (!ativo) {
+      setNumeroParcelas("");
+      setParcelas([]);
+      setOrigemDasParcelas(null);
+    }
     // Um comprovante não cabe num lançamento parcelado: cada parcela é paga (e tem seu próprio
     // comprovante) em um momento diferente, lá na aba de Despesas do imóvel.
     if (ativo) setArquivoSelecionado(null);
@@ -72,25 +83,45 @@ export default function FormularioDespesa({ imovelId, onClose, onSuccess }) {
     }
   };
 
-  // Prévia das parcelas: só recalcula quando os dados necessários já são válidos.
-  const parcelasCalculadas = useMemo(() => {
-    if (!parcelado) return null;
+  // Regenera a sugestão de parcelas quando o valor total, a quantidade ou o 1º vencimento mudam —
+  // feito durante a própria renderização (padrão recomendado pelo React para "ajustar um estado
+  // quando outro muda"), não em um useEffect, para não desenhar por um instante a lista antiga.
+  // Qualquer edição feita diretamente numa parcela (ver atualizarParcela) não altera esses três
+  // valores de origem, então sobrevive normalmente — só uma mudança neles gera a lista de novo.
+  const origemAtualDasParcelas = parcelado ? `${formData.valor}|${numeroParcelas}|${formData.dataVencimento}` : null;
+  if (parcelado && origemAtualDasParcelas !== origemDasParcelas) {
+    setOrigemDasParcelas(origemAtualDasParcelas);
 
     const valorTotal = Number(formData.valor);
     const quantidade = Number(numeroParcelas);
     const quantidadeValida =
       Number.isInteger(quantidade) && quantidade >= NUMERO_MINIMO_PARCELAS && quantidade <= NUMERO_MAXIMO_PARCELAS;
 
-    if (!(valorTotal > 0) || !quantidadeValida || !formData.dataVencimento) return null;
+    setParcelas(
+      valorTotal > 0 && quantidadeValida && formData.dataVencimento
+        ? paraParcelasEditaveis(dividirEmParcelas(valorTotal, quantidade, formData.dataVencimento))
+        : [],
+    );
+  }
 
-    return dividirEmParcelas(valorTotal, quantidade, formData.dataVencimento);
-  }, [parcelado, formData.valor, formData.dataVencimento, numeroParcelas]);
+  const atualizarParcela = (indice, campos) =>
+    setParcelas((atual) => atual.map((parcela, i) => (i === indice ? { ...parcela, ...campos } : parcela)));
+
+  const somaDasParcelas = parcelas.reduce((total, p) => total + (paraNumero(p.valor) || 0), 0);
+  const somaDiferenteDoTotal = parcelado && parcelas.length > 0 && Math.abs(somaDasParcelas - Number(formData.valor)) >= 0.01;
 
   const validar = () => {
+    if (!formData.idContratoLocacao) {
+      return "Selecione o contrato ao qual esta despesa pertence.";
+    }
+
     if (parcelado) {
-      const quantidade = Number(numeroParcelas);
-      if (!Number.isInteger(quantidade) || quantidade < NUMERO_MINIMO_PARCELAS || quantidade > NUMERO_MAXIMO_PARCELAS) {
-        return `Informe um número de parcelas entre ${NUMERO_MINIMO_PARCELAS} e ${NUMERO_MAXIMO_PARCELAS}.`;
+      if (parcelas.length < NUMERO_MINIMO_PARCELAS) {
+        return "Preencha o valor total, a quantidade e o 1º vencimento para gerar as parcelas.";
+      }
+      const parcelaInvalida = parcelas.find((p) => !Number.isFinite(paraNumero(p.valor)) || paraNumero(p.valor) <= 0 || !p.dataVencimento);
+      if (parcelaInvalida) {
+        return `Revise o valor e o vencimento da parcela ${parcelaInvalida.numero}: ambos são obrigatórios e o valor deve ser maior que zero.`;
       }
     }
 
@@ -105,10 +136,11 @@ export default function FormularioDespesa({ imovelId, onClose, onSuccess }) {
     await criarDespesaParcelada({
       idContratoLocacao: Number(formData.idContratoLocacao),
       descricao: formData.descricao,
-      valorTotal: Number(formData.valor),
       tipo: formData.tipo,
-      numeroParcelas: Number(numeroParcelas),
-      dataPrimeiraParcela: formData.dataVencimento,
+      parcelas: parcelas.map((p) => ({
+        valor: paraNumero(p.valor),
+        dataVencimento: p.dataVencimento,
+      })),
     });
   };
 
@@ -166,20 +198,27 @@ export default function FormularioDespesa({ imovelId, onClose, onSuccess }) {
   return (
     <form onSubmit={handleSubmit} className="p-6 space-y-4">
       <div className="grid grid-cols-2 gap-4">
-        {/* ID do Contrato (No futuro pode ser um Select que busca os contratos do imóvel) */}
         <div>
-          <label className="block text-sm text-gray-700 mb-1">
-            ID do Contrato
-          </label>
-          <input
-            type="number"
-            name="idContratoLocacao"
-            value={formData.idContratoLocacao}
-            onChange={handleChange}
-            required
-            placeholder="Ex: 1"
-            className={classeCampo}
-          />
+          <label className="block text-sm text-gray-700 mb-1">Contrato</label>
+          {contratosOrdenados.length === 0 ? (
+            <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+              Este imóvel não tem nenhum contrato cadastrado. Cadastre um contrato antes de lançar despesas.
+            </p>
+          ) : (
+            <select
+              name="idContratoLocacao"
+              value={formData.idContratoLocacao}
+              onChange={handleChange}
+              required
+              className={`${classeCampo} bg-white`}
+            >
+              {contratosOrdenados.map((contrato) => (
+                <option key={contrato.id} value={String(contrato.id)}>
+                  {rotuloContrato(contrato)}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div>
@@ -227,7 +266,7 @@ export default function FormularioDespesa({ imovelId, onClose, onSuccess }) {
 
         <div>
           <label className="block text-sm text-gray-700 mb-1">
-            {parcelado ? "Vencimento da 1ª parcela" : "Data de Vencimento"}
+            {parcelado ? "Vencimento sugerido da 1ª parcela" : "Data de Vencimento"}
           </label>
           <input
             type="date"
@@ -268,8 +307,36 @@ export default function FormularioDespesa({ imovelId, onClose, onSuccess }) {
         Lançar em várias parcelas (ex.: IPTU)
       </label>
 
-      {parcelado && parcelasCalculadas && (
-        <PrevisaoParcelas parcelas={parcelasCalculadas} numeroParcelas={numeroParcelas} />
+      {parcelado && parcelas.length > 0 && (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <p className="text-xs font-medium text-gray-600 mb-2">
+            Parcelas geradas automaticamente — ajuste o valor ou o vencimento de qualquer uma, se precisar:
+          </p>
+          <div className="max-h-56 overflow-y-auto space-y-2">
+            {parcelas.map((parcela, indice) => (
+              <div key={parcela.numero} className="grid grid-cols-[4.5rem,1fr,1fr] gap-2 items-center">
+                <span className="text-xs text-gray-500">{parcela.numero}/{parcelas.length}</span>
+                <CampoDecimal
+                  prefixo="R$"
+                  value={parcela.valor}
+                  onChange={(valor) => atualizarParcela(indice, { valor })}
+                  aria-label={`Valor da parcela ${parcela.numero}`}
+                />
+                <input
+                  type="date"
+                  value={parcela.dataVencimento}
+                  onChange={(e) => atualizarParcela(indice, { dataVencimento: e.target.value })}
+                  aria-label={`Vencimento da parcela ${parcela.numero}`}
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+            ))}
+          </div>
+          <p className={`mt-2 text-xs ${somaDiferenteDoTotal ? "text-amber-700" : "text-gray-500"}`}>
+            Soma das parcelas: {formatarMoeda(somaDasParcelas)}
+            {somaDiferenteDoTotal && ` — diferente do valor total informado (${formatarMoeda(formData.valor)})`}
+          </p>
+        </div>
       )}
 
       {/* Sem parcelamento: a despesa é lançada como EM_ABERTO por padrão; anexar o comprovante aqui já a dá como paga. */}
@@ -319,7 +386,7 @@ export default function FormularioDespesa({ imovelId, onClose, onSuccess }) {
         <Button variant="secondary" onClick={onClose} type="button" disabled={enviando}>
           Cancelar
         </Button>
-        <Button variant="primary" type="submit" disabled={enviando}>
+        <Button variant="primary" type="submit" disabled={enviando || contratosOrdenados.length === 0}>
           {enviando ? "Salvando..." : parcelado ? "Lançar Parcelas" : "Salvar Despesa"}
         </Button>
       </div>
