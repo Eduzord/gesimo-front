@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { UploadCloud, FileText, FileWarning, Edit, MapPin, ArrowLeft, Trash2, AlertCircle, CheckCircle2, UserPlus, Calculator } from "lucide-react";
+import { UploadCloud, FileText, FileWarning, Edit, MapPin, ArrowLeft, Trash2, AlertCircle, AlertTriangle, CheckCircle2, UserPlus, Calculator } from "lucide-react";
 import Sidebar from "../../components/Sidebar";
 import Header from "../../components/Header";
 import Badge from "../../components/Badge";
@@ -256,6 +256,10 @@ export default function DetalhesImovel() {
 
     return true;
   });
+
+  // Independente do filtro em uso: quantas despesas estão PAGAS mas sem comprovante anexado (a
+  // pendência "silenciosa" que não se nota de relance numa lista grande) — vira o aviso âmbar acima da tabela.
+  const despesasPagasSemComprovante = despesasImovel.filter((d) => d.status === "PAGA" && !d.comprovantePagamento);
 
   // Locatário só entra por contrato: o imóvel precisa estar livre e ter proprietários para o contrato apontar um deles
   let motivoSemLocatario = "";
@@ -650,6 +654,24 @@ export default function DetalhesImovel() {
                       + Nova Despesa
                     </Button>
                   </div>
+
+                  {despesasPagasSemComprovante.length > 0 && (
+                    <div className="flex items-center gap-3 mb-4 p-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800">
+                      <AlertTriangle size={20} className="shrink-0" />
+                      <p className="text-sm flex-1">
+                        {despesasPagasSemComprovante.length === 1
+                          ? "Há 1 despesa marcada como paga, mas sem comprovante anexado."
+                          : `Há ${despesasPagasSemComprovante.length} despesas marcadas como pagas, mas sem comprovante anexado.`}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setFiltroDespesas({ ...FILTRO_DESPESAS_VAZIO, situacao: "SEM_COMPROVANTE" })}
+                        className="text-sm font-semibold text-amber-900 hover:text-amber-950 underline underline-offset-2 shrink-0"
+                      >
+                        Clique aqui para visualizá-las
+                      </button>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
                     <div>
